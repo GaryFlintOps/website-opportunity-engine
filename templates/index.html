@@ -1,0 +1,652 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Website Opportunity Engine</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        :root {
+            --bg:      #0f1117;
+            --surface: #1a1d27;
+            --surface2:#22263a;
+            --border:  #2d3148;
+            --accent:  #6c63ff;
+            --accent-s:rgba(108,99,255,0.14);
+            --gold:    #f0b429;
+            --green:   #38d9a9;
+            --red:     #ff6b6b;
+            --orange:  #ff9f43;
+            --text:    #e4e6f0;
+            --muted:   #8b8fa8;
+        }
+        body { background: var(--bg); color: var(--text); font-family: 'Inter', sans-serif; min-height: 100vh; }
+
+        /* LAYOUT */
+        .layout { display: flex; min-height: 100vh; }
+        .sidebar {
+            width: 300px; min-width: 300px;
+            background: var(--surface);
+            border-right: 1px solid var(--border);
+            padding: 2rem 1.5rem;
+            position: sticky; top: 0; height: 100vh; overflow-y: auto;
+            display: flex; flex-direction: column; gap: 1.75rem;
+        }
+        .main { flex: 1; padding: 2rem; overflow-x: auto; }
+
+        /* BRAND */
+        .brand { display: flex; align-items: center; gap: 0.75rem; }
+        .brand-icon { font-size: 1.5rem; }
+        .brand h1 { font-size: 1.05rem; font-weight: 700; line-height: 1.2; }
+        .brand p  { font-size: 0.72rem; color: var(--muted); margin-top: 0.15rem; }
+
+        /* CARD */
+        .sidebar-card {
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            border-radius: 10px; padding: 1.4rem;
+        }
+        .sidebar-card h2 {
+            font-size: 0.75rem; font-weight: 600; color: var(--muted);
+            letter-spacing: 0.09em; text-transform: uppercase; margin-bottom: 1.1rem;
+        }
+
+        /* FORM ELEMENTS */
+        label { display: block; font-size: 0.75rem; font-weight: 500; color: var(--muted); margin-bottom: 0.3rem; }
+        input[type="text"] {
+            width: 100%; background: var(--bg);
+            border: 1px solid var(--border); border-radius: 6px;
+            padding: 0.62rem 0.85rem; color: var(--text);
+            font-size: 0.875rem; font-family: inherit; margin-bottom: 0.9rem;
+            transition: border-color 0.2s;
+        }
+        input[type="text"]:focus { outline: none; border-color: var(--accent); }
+        input[type="text"]::placeholder { color: var(--muted); }
+        select {
+            width: 100%; background: var(--bg);
+            border: 1px solid var(--border); border-radius: 6px;
+            padding: 0.58rem 0.85rem; color: var(--text);
+            font-size: 0.83rem; font-family: inherit; cursor: pointer;
+        }
+        select:focus { outline: none; border-color: var(--accent); }
+        .filter-group { margin-bottom: 0.9rem; }
+        .checkbox-row {
+            display: flex; align-items: center; gap: 0.55rem; margin-top: 0.9rem;
+        }
+        .checkbox-row input[type="checkbox"] { accent-color: var(--accent); width: 14px; height: 14px; }
+        .checkbox-row label { margin: 0; color: var(--text); font-size: 0.83rem; cursor: pointer; }
+
+        /* BUTTONS */
+        .btn {
+            display: inline-flex; align-items: center; gap: 0.4rem;
+            border-radius: 6px; font-family: inherit; font-weight: 600;
+            cursor: pointer; transition: opacity 0.18s, transform 0.15s;
+            text-decoration: none; border: none;
+        }
+        .btn:hover:not(:disabled) { opacity: 0.85; transform: translateY(-1px); }
+        .btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+        .btn-primary { background: var(--accent); color: #fff; padding: 0.72rem 1rem; font-size: 0.875rem; width: 100%; justify-content: center; }
+        .btn-ghost   { background: transparent; color: var(--muted); border: 1px solid var(--border); padding: 0.6rem 1rem; font-size: 0.82rem; width: 100%; justify-content: center; margin-top: 0.6rem; }
+        .btn-ghost:hover:not(:disabled) { border-color: var(--accent); color: var(--text); }
+        .btn-sm { padding: 0.32rem 0.75rem; font-size: 0.75rem; }
+        .btn-accent { background: var(--accent-s); color: var(--accent); }
+        .btn-generate { background: rgba(56,217,169,0.12); color: var(--green); border: 1px solid rgba(56,217,169,0.2); }
+        .btn-approve  { background: rgba(240,180,41,0.1); color: var(--gold); border: 1px solid rgba(240,180,41,0.2); }
+
+        /* STATS */
+        .stats { display: flex; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 1.5rem; }
+        .stat {
+            background: var(--surface); border: 1px solid var(--border);
+            border-radius: 8px; padding: 0.75rem 1rem; flex: 1; min-width: 90px;
+        }
+        .stat-val   { font-size: 1.6rem; font-weight: 700; line-height: 1; }
+        .stat-label { font-size: 0.7rem; color: var(--muted); margin-top: 0.25rem; }
+
+        /* CONTEXT BAR */
+        .context-bar {
+            display: flex; align-items: center; justify-content: space-between;
+            margin-bottom: 1.25rem; flex-wrap: wrap; gap: 0.5rem;
+        }
+        .context-bar h2 { font-size: 1.05rem; font-weight: 700; }
+        .context-bar span { font-size: 0.78rem; color: var(--muted); }
+
+        /* BULK ACTION BAR */
+        .bulk-bar {
+            display: none;
+            align-items: center; justify-content: space-between;
+            background: var(--surface2); border: 1px solid var(--border);
+            border-radius: 8px; padding: 0.75rem 1.25rem;
+            margin-bottom: 1rem; gap: 1rem;
+        }
+        .bulk-bar.active { display: flex; }
+        .bulk-bar-left  { font-size: 0.85rem; color: var(--text); }
+        .bulk-bar-left span { font-weight: 700; color: var(--accent); }
+        .bulk-bar-right { display: flex; gap: 0.6rem; }
+        .btn-bulk-gen {
+            background: var(--accent); color: #fff;
+            padding: 0.5rem 1.2rem; font-size: 0.82rem; font-weight: 700;
+            border-radius: 6px; border: none; cursor: pointer; font-family: inherit;
+            transition: opacity 0.18s;
+        }
+        .btn-bulk-gen:hover { opacity: 0.85; }
+        .btn-bulk-clear {
+            background: transparent; color: var(--muted); border: 1px solid var(--border);
+            padding: 0.5rem 1rem; font-size: 0.82rem; font-weight: 600;
+            border-radius: 6px; cursor: pointer; font-family: inherit;
+        }
+
+        /* TABLE */
+        .table-wrap { border-radius: 10px; border: 1px solid var(--border); overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; font-size: 0.86rem; }
+        thead th {
+            background: var(--surface); padding: 0.82rem 1rem;
+            text-align: left; font-size: 0.7rem; font-weight: 600;
+            color: var(--muted); letter-spacing: 0.09em; text-transform: uppercase;
+            border-bottom: 1px solid var(--border); white-space: nowrap;
+        }
+        tbody tr { border-bottom: 1px solid var(--border); transition: background 0.12s; }
+        tbody tr:last-child { border-bottom: none; }
+        tbody tr:hover { background: rgba(255,255,255,0.02); }
+        tbody td { padding: 0.85rem 1rem; vertical-align: middle; }
+
+        /* CHECKBOX COL */
+        .col-check { width: 36px; text-align: center; }
+        .col-check input[type="checkbox"] { accent-color: var(--accent); width: 15px; height: 15px; cursor: pointer; }
+
+        /* BIZ CELL */
+        .biz-name { font-weight: 600; color: var(--text); }
+        .biz-city { font-size: 0.74rem; color: var(--muted); margin-top: 0.15rem; }
+
+        /* SCORE BADGE */
+        .score-badge {
+            display: inline-flex; align-items: center; justify-content: center;
+            width: 34px; height: 34px; border-radius: 8px;
+            font-weight: 700; font-size: 0.95rem;
+        }
+        .score-high { background: rgba(56,217,169,0.14); color: var(--green); }
+        .score-mid  { background: rgba(240,180,41,0.14); color: var(--gold); }
+        .score-low  { background: rgba(139,143,168,0.1); color: var(--muted); }
+
+        /* TAGS */
+        .tag { display: inline-block; padding: 0.18rem 0.55rem; border-radius: 4px; font-size: 0.7rem; font-weight: 600; }
+        .tag-no  { background: rgba(255,107,107,0.1); color: var(--red); }
+        .tag-yes { background: rgba(56,217,169,0.1); color: var(--green); }
+
+        /* DEMO STATE BADGE */
+        .state-badge {
+            display: inline-block; padding: 0.22rem 0.65rem;
+            border-radius: 999px; font-size: 0.68rem; font-weight: 700;
+            letter-spacing: 0.05em; text-transform: uppercase; white-space: nowrap;
+        }
+        .state-not_generated { background: rgba(139,143,168,0.1); color: var(--muted); }
+        .state-generated     { background: rgba(108,99,255,0.14); color: var(--accent); }
+        .state-approved      { background: rgba(56,217,169,0.14); color: var(--green); }
+        .state-sent          { background: rgba(240,180,41,0.12); color: var(--gold); }
+
+        /* RATING */
+        .stars      { color: var(--gold); font-size: 0.78rem; }
+        .rating-val { font-size: 0.78rem; color: var(--muted); }
+
+        /* ROW ACTIONS */
+        .row-actions { display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap; }
+        .btn-view {
+            display: inline-block; padding: 0.35rem 0.8rem;
+            background: var(--accent-s); color: var(--accent);
+            border-radius: 5px; text-decoration: none;
+            font-size: 0.74rem; font-weight: 600; white-space: nowrap;
+        }
+        .btn-view:hover { background: rgba(108,99,255,0.22); }
+        .btn-copy {
+            background: rgba(139,143,168,0.1); color: var(--muted);
+            border: 1px solid var(--border); padding: 0.32rem 0.75rem;
+            font-size: 0.74rem; font-weight: 600; border-radius: 5px;
+            cursor: pointer; font-family: inherit; white-space: nowrap;
+            transition: opacity 0.15s;
+        }
+        .btn-copy:hover { opacity: 0.75; }
+
+        /* BANNERS */
+        .running-banner {
+            background: rgba(108,99,255,0.1); border: 1px solid rgba(108,99,255,0.3);
+            border-radius: 8px; padding: 1.1rem 1.4rem;
+            display: flex; align-items: center; gap: 1rem; margin-bottom: 1.5rem;
+        }
+        .spinner {
+            width: 18px; height: 18px;
+            border: 2px solid rgba(108,99,255,0.3);
+            border-top-color: var(--accent);
+            border-radius: 50%; animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .running-banner p { color: var(--accent); font-size: 0.875rem; font-weight: 500; }
+
+        .error-banner {
+            background: rgba(255,107,107,0.07); border: 1px solid rgba(255,107,107,0.25);
+            border-radius: 8px; padding: 0.9rem 1.4rem; margin-bottom: 1.5rem;
+            color: var(--red); font-size: 0.83rem;
+        }
+
+        /* EMPTY STATE */
+        .empty-state { text-align: center; padding: 5rem 2rem; color: var(--muted); }
+        .empty-icon  { font-size: 2.8rem; margin-bottom: 1rem; }
+        .empty-state h3 { font-size: 1rem; color: var(--text); margin-bottom: 0.4rem; }
+        .empty-state p  { font-size: 0.875rem; }
+
+        /* TOAST */
+        #toast {
+            position: fixed; bottom: 2rem; left: 50%; transform: translateX(-50%) translateY(20px);
+            background: var(--surface2); border: 1px solid var(--border);
+            color: var(--text); padding: 0.7rem 1.4rem; border-radius: 8px;
+            font-size: 0.83rem; font-weight: 500;
+            opacity: 0; transition: opacity 0.25s, transform 0.25s;
+            pointer-events: none; z-index: 9999; white-space: nowrap;
+        }
+        #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+        @media (max-width: 900px) {
+            .layout { flex-direction: column; }
+            .sidebar { width: 100%; height: auto; position: static; }
+        }
+    </style>
+</head>
+<body>
+<div class="layout">
+
+    <!-- SIDEBAR -->
+    <aside class="sidebar">
+        <div class="brand">
+            <div class="brand-icon">🎯</div>
+            <div>
+                <h1>Opportunity Engine</h1>
+                <p>Website lead finder</p>
+            </div>
+        </div>
+
+        <!-- SEARCH -->
+        <div class="sidebar-card">
+            <h2>New Search</h2>
+            <form method="POST" action="/search" id="searchForm">
+                <label for="industry">Industry</label>
+                <input type="text" id="industry" name="industry"
+                    value="{{ industry }}" placeholder="e.g. coffee shops" required />
+                <label for="location">Location</label>
+                <input type="text" id="location" name="location"
+                    value="{{ location }}" placeholder="e.g. Dubai" required />
+                <button type="submit" class="btn btn-primary" id="searchBtn"
+                    {% if running %}disabled{% endif %}>
+                    {% if running %}⏳ Searching…{% else %}🔍 Search Leads{% endif %}
+                </button>
+            </form>
+        </div>
+
+        <!-- FILTERS (only when leads exist) -->
+        {% if total > 0 %}
+        <form class="sidebar-card" method="GET" action="/" id="filterForm">
+            <h2>Filter</h2>
+            <div class="filter-group">
+                <label>Min score</label>
+                <select name="min_score" onchange="this.form.submit()">
+                    <option value="0"  {% if min_score == 0 %}selected{% endif %}>All scores</option>
+                    <option value="5"  {% if min_score == 5 %}selected{% endif %}>5+ Warm</option>
+                    <option value="7"  {% if min_score == 7 %}selected{% endif %}>7+ Hot</option>
+                    <option value="9"  {% if min_score == 9 %}selected{% endif %}>9–10 🔥</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label>Max reviews</label>
+                <select name="max_reviews" onchange="this.form.submit()">
+                    <option value="0"   {% if max_reviews == 0 %}selected{% endif %}>Any</option>
+                    <option value="20"  {% if max_reviews == 20 %}selected{% endif %}>Under 20</option>
+                    <option value="50"  {% if max_reviews == 50 %}selected{% endif %}>Under 50</option>
+                    <option value="100" {% if max_reviews == 100 %}selected{% endif %}>Under 100</option>
+                </select>
+            </div>
+            <div class="checkbox-row">
+                <input type="checkbox" id="no_website" name="no_website" value="true"
+                    {% if no_website %}checked{% endif %}
+                    onchange="this.form.submit()" />
+                <label for="no_website">No website only</label>
+            </div>
+        </form>
+        {% endif %}
+    </aside>
+
+    <!-- MAIN -->
+    <main class="main">
+
+        {% if running %}
+        <div class="running-banner" id="runningBanner">
+            <div class="spinner"></div>
+            <p>Fetching leads from Google Maps… usually 60–120 seconds.</p>
+        </div>
+        {% endif %}
+
+        {% if error %}
+        <div class="error-banner"><strong>⚠ Error:</strong> {{ error }}</div>
+        {% endif %}
+
+        {% if total > 0 %}
+
+        <!-- STATS -->
+        <div class="stats">
+            <div class="stat">
+                <div class="stat-val">{{ total }}</div>
+                <div class="stat-label">Total Leads</div>
+            </div>
+            <div class="stat">
+                <div class="stat-val">{{ leads | selectattr('has_website', 'equalto', False) | list | length }}</div>
+                <div class="stat-label">No Website</div>
+            </div>
+            <div class="stat">
+                <div class="stat-val">{{ leads | selectattr('score', 'ge', 7) | list | length }}</div>
+                <div class="stat-label">Hot (7+)</div>
+            </div>
+            <div class="stat">
+                <div class="stat-val">{{ leads | selectattr('demo_state', 'ne', 'not_generated') | list | length }}</div>
+                <div class="stat-label">Demos Built</div>
+            </div>
+        </div>
+
+        <!-- CONTEXT BAR -->
+        <div class="context-bar">
+            <h2>
+                {% if industry and location %}{{ industry | title }} · {{ location | title }}
+                {% else %}Latest Results{% endif %}
+            </h2>
+            <span>{{ filtered_count }} of {{ total }} shown</span>
+        </div>
+
+        <!-- BULK ACTION BAR -->
+        <div class="bulk-bar" id="bulkBar">
+            <div class="bulk-bar-left">
+                <span id="selectedCount">0</span> leads selected
+            </div>
+            <div class="bulk-bar-right">
+                <button class="btn-bulk-gen" id="bulkGenerateBtn" onclick="bulkGenerate()">
+                    🚀 Generate Selected Demos
+                </button>
+                <button class="btn-bulk-clear" onclick="clearSelection()">Clear</button>
+            </div>
+        </div>
+
+        {% endif %}
+
+        <!-- TABLE -->
+        {% if leads %}
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th class="col-check">
+                            <input type="checkbox" id="selectAll" onchange="toggleAll(this)" />
+                        </th>
+                        <th>Score</th>
+                        <th>Business</th>
+                        <th>Rating</th>
+                        <th>Reviews</th>
+                        <th>Website</th>
+                        <th>Demo</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody id="leadsBody">
+                    {% for lead in leads %}
+                    <tr data-slug="{{ lead.slug }}">
+                        <td class="col-check">
+                            <input type="checkbox" class="row-check"
+                                value="{{ lead.slug }}"
+                                onchange="onCheckChange()" />
+                        </td>
+                        <td>
+                            <span class="score-badge {{ lead.score_class }}">{{ lead.score }}</span>
+                        </td>
+                        <td>
+                            <div class="biz-name">{{ lead.name }}</div>
+                            {% if lead.city %}<div class="biz-city">{{ lead.city }}</div>{% endif %}
+                        </td>
+                        <td>
+                            {% if lead.rating %}
+                            <span class="stars">★</span>
+                            <span class="rating-val">{{ "%.1f" | format(lead.rating | float) }}</span>
+                            {% else %}<span class="rating-val">—</span>{% endif %}
+                        </td>
+                        <td><span class="rating-val">{{ lead.reviews_count or '—' }}</span></td>
+                        <td>
+                            {% if lead.has_website %}
+                            <span class="tag tag-yes">✓ Yes</span>
+                            {% else %}
+                            <span class="tag tag-no">✗ None</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <span class="state-badge state-{{ lead.demo_state }}"
+                                  id="state-{{ lead.slug }}">
+                                {% if lead.demo_state == 'not_generated' %}Not built
+                                {% elif lead.demo_state == 'generated' %}Built
+                                {% elif lead.demo_state == 'approved' %}Approved
+                                {% elif lead.demo_state == 'sent' %}Sent
+                                {% endif %}
+                            </span>
+                        </td>
+                        <td>
+                            <div class="row-actions" id="actions-{{ lead.slug }}">
+                                <a href="/lead/{{ lead.slug }}" class="btn-view">View →</a>
+                                {% if lead.demo_state == 'not_generated' %}
+                                <button class="btn btn-sm btn-generate"
+                                    onclick="generateOne('{{ lead.slug }}', this)">
+                                    🚀 Generate
+                                </button>
+                                {% else %}
+                                <a href="{{ site_url }}/demo/{{ lead.slug }}" target="_blank"
+                                   class="btn btn-sm btn-accent">
+                                    🔗 View Demo
+                                </a>
+                                {% if lead.demo_state == 'generated' %}
+                                <button class="btn btn-sm btn-approve"
+                                    onclick="approveOne('{{ lead.slug }}', this)">
+                                    ✓ Approve
+                                </button>
+                                {% endif %}
+                                <button class="btn-copy"
+                                    onclick="copyLink('{{ site_url }}/demo/{{ lead.slug }}', this)">
+                                    📋 Copy Link
+                                </button>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        {% elif not running %}
+        <div class="empty-state">
+            <div class="empty-icon">🔍</div>
+            <h3>No leads yet</h3>
+            <p>Use the search form to find business opportunities in any city.</p>
+        </div>
+        {% endif %}
+
+    </main>
+</div>
+
+<!-- TOAST -->
+<div id="toast"></div>
+
+<script>
+// ── Auto-poll while search is running ────────────────────────────────────────
+{% if running %}
+const poll = setInterval(async () => {
+    const r = await fetch('/status');
+    const d = await r.json();
+    if (!d.running) { clearInterval(poll); location.reload(); }
+}, 4000);
+{% endif %}
+
+document.getElementById('searchForm')?.addEventListener('submit', () => {
+    const btn = document.getElementById('searchBtn');
+    btn.disabled = true;
+    btn.textContent = '⏳ Starting…';
+});
+
+// ── Toast notification ────────────────────────────────────────────────────────
+function showToast(msg, duration = 3000) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), duration);
+}
+
+// ── Checkbox selection ────────────────────────────────────────────────────────
+function toggleAll(cb) {
+    document.querySelectorAll('.row-check').forEach(c => c.checked = cb.checked);
+    onCheckChange();
+}
+
+function onCheckChange() {
+    const checked = [...document.querySelectorAll('.row-check:checked')];
+    const bar     = document.getElementById('bulkBar');
+    const count   = document.getElementById('selectedCount');
+    count.textContent = checked.length;
+    bar.classList.toggle('active', checked.length > 0);
+    // Uncheck selectAll if not all selected
+    const all = document.querySelectorAll('.row-check');
+    document.getElementById('selectAll').indeterminate =
+        checked.length > 0 && checked.length < all.length;
+    document.getElementById('selectAll').checked = checked.length === all.length;
+}
+
+function clearSelection() {
+    document.querySelectorAll('.row-check').forEach(c => c.checked = false);
+    document.getElementById('selectAll').checked = false;
+    onCheckChange();
+}
+
+// ── Site URL (injected server-side via Jinja) ─────────────────────────────────
+const SITE_URL = '{{ site_url }}';
+
+// ── Per-row generate ──────────────────────────────────────────────────────────
+async function generateOne(slug, btn) {
+    btn.disabled = true;
+    btn.textContent = '⏳…';
+    try {
+        const r = await fetch(`/generate-demo/${slug}`, { method: 'POST' });
+        const d = await r.json();
+        if (d.ok) {
+            // Update state badge
+            const badge = document.getElementById(`state-${slug}`);
+            if (badge) {
+                badge.textContent = 'Built';
+                badge.className = 'state-badge state-generated';
+            }
+            // Rebuild action buttons
+            const parent = document.getElementById(`actions-${slug}`);
+            btn.remove();
+
+            const link = document.createElement('a');
+            link.href = `${SITE_URL}/demo/${slug}`;
+            link.target = '_blank';
+            link.className = 'btn btn-sm btn-accent';
+            link.textContent = '🔗 View Demo';
+            parent.appendChild(link);
+
+            const approveBtn = document.createElement('button');
+            approveBtn.className = 'btn btn-sm btn-approve';
+            approveBtn.textContent = '✓ Approve';
+            approveBtn.onclick = () => approveOne(slug, approveBtn);
+            parent.appendChild(approveBtn);
+
+            const copyBtn = document.createElement('button');
+            copyBtn.className = 'btn-copy';
+            copyBtn.textContent = '📋 Copy Link';
+            copyBtn.onclick = () => copyLink(`${SITE_URL}/demo/${slug}`, copyBtn);
+            parent.appendChild(copyBtn);
+
+            showToast(`✅ Demo generated for ${slug}`);
+        } else {
+            btn.disabled = false;
+            btn.textContent = '🚀 Generate';
+            showToast(`❌ Error: ${d.error}`);
+        }
+    } catch (e) {
+        btn.disabled = false;
+        btn.textContent = '🚀 Generate';
+        showToast('❌ Request failed');
+    }
+}
+
+// ── Approve demo ──────────────────────────────────────────────────────────────
+async function approveOne(slug, btn) {
+    btn.disabled = true;
+    btn.textContent = '⏳…';
+    try {
+        const r = await fetch(`/approve/${slug}`, { method: 'POST' });
+        const d = await r.json();
+        if (d.ok) {
+            const badge = document.getElementById(`state-${slug}`);
+            if (badge) {
+                badge.textContent = 'Approved';
+                badge.className = 'state-badge state-approved';
+            }
+            btn.remove();
+            showToast(`✅ ${slug} approved`);
+        } else {
+            btn.disabled = false;
+            btn.textContent = '✓ Approve';
+            showToast(`❌ ${d.error}`);
+        }
+    } catch (e) {
+        btn.disabled = false;
+        btn.textContent = '✓ Approve';
+        showToast('❌ Request failed');
+    }
+}
+
+// ── Copy demo link ────────────────────────────────────────────────────────────
+async function copyLink(url, btn) {
+    try {
+        await navigator.clipboard.writeText(url);
+        const orig = btn.textContent;
+        btn.textContent = '✓ Copied!';
+        setTimeout(() => { btn.textContent = orig; }, 2000);
+        showToast('📋 Link copied to clipboard');
+    } catch (e) {
+        showToast('❌ Copy failed — try manually');
+    }
+}
+
+// ── Bulk generate ─────────────────────────────────────────────────────────────
+async function bulkGenerate() {
+    const slugs = [...document.querySelectorAll('.row-check:checked')].map(c => c.value);
+    if (!slugs.length) return;
+    const btn = document.getElementById('bulkGenerateBtn');
+    btn.disabled = true;
+    btn.textContent = `⏳ Generating ${slugs.length}…`;
+    try {
+        const r = await fetch('/bulk-generate', {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body:    JSON.stringify({ slugs }),
+        });
+        const d = await r.json();
+        if (d.ok) {
+            showToast(`🚀 ${d.queued} demos queued — refresh in ~10s`, 5000);
+            clearSelection();
+            // Reload after delay so states are updated
+            setTimeout(() => location.reload(), 12000);
+        } else {
+            showToast(`❌ ${d.error}`);
+        }
+    } catch (e) {
+        showToast('❌ Request failed');
+    } finally {
+        btn.disabled = false;
+        btn.textContent = '🚀 Generate Selected Demos';
+    }
+}
+</script>
+</body>
+</html>

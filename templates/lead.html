@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{{ lead.name }} — Lead Detail</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        :root {
+            --bg:      #0f1117;
+            --surface: #1a1d27;
+            --surface2:#22263a;
+            --border:  #2d3148;
+            --accent:  #6c63ff;
+            --accent-s:rgba(108,99,255,0.14);
+            --gold:    #f0b429;
+            --green:   #38d9a9;
+            --red:     #ff6b6b;
+            --text:    #e4e6f0;
+            --muted:   #8b8fa8;
+        }
+        body { background: var(--bg); color: var(--text); font-family: 'Inter', sans-serif; min-height: 100vh; padding: 2rem; }
+        .container { max-width: 980px; margin: 0 auto; }
+
+        /* BACK */
+        .back-btn {
+            display: inline-flex; align-items: center; gap: 0.4rem;
+            color: var(--muted); text-decoration: none; font-size: 0.83rem;
+            padding: 0.45rem 0.9rem; border: 1px solid var(--border);
+            border-radius: 6px; margin-bottom: 2rem; transition: all 0.18s;
+        }
+        .back-btn:hover { color: var(--text); border-color: var(--accent); }
+
+        /* CARD */
+        .card {
+            background: var(--surface); border: 1px solid var(--border);
+            border-radius: 12px; padding: 1.75rem; margin-bottom: 1.25rem;
+        }
+        .card h3 {
+            font-size: 0.7rem; font-weight: 600; color: var(--muted);
+            letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 1.1rem;
+        }
+
+        /* LEAD HEADER */
+        .lead-header {
+            background: var(--surface); border: 1px solid var(--border);
+            border-radius: 14px; padding: 2.25rem;
+            display: flex; justify-content: space-between;
+            align-items: flex-start; gap: 2rem; flex-wrap: wrap;
+            margin-bottom: 1.25rem;
+        }
+        .lead-name  { font-size: 1.9rem; font-weight: 800; margin-bottom: 0.6rem; }
+        .lead-meta  { display: flex; gap: 0.6rem; flex-wrap: wrap; }
+        .meta-tag   {
+            background: var(--surface2); border: 1px solid var(--border);
+            padding: 0.25rem 0.7rem; border-radius: 5px;
+            font-size: 0.74rem; color: var(--muted);
+        }
+        .score-big {
+            display: flex; flex-direction: column; align-items: center;
+            justify-content: center; width: 86px; height: 86px;
+            border-radius: 14px; font-weight: 800; flex-shrink: 0;
+        }
+        .score-big .num { font-size: 2.4rem; line-height: 1; }
+        .score-big .lbl { font-size: 0.62rem; letter-spacing: 0.1em; text-transform: uppercase; margin-top: 0.2rem; }
+        .score-high { background: rgba(56,217,169,0.12); color: var(--green); border: 1px solid rgba(56,217,169,0.25); }
+        .score-mid  { background: rgba(240,180,41,0.12); color: var(--gold); border: 1px solid rgba(240,180,41,0.25); }
+        .score-low  { background: rgba(139,143,168,0.1); color: var(--muted); border: 1px solid var(--border); }
+
+        /* DEMO ACTION PANEL */
+        .demo-panel {
+            border-radius: 14px; padding: 2rem 2.25rem;
+            margin-bottom: 1.25rem;
+            display: flex; align-items: center; justify-content: space-between;
+            gap: 2rem; flex-wrap: wrap;
+        }
+        .demo-panel.state-not_generated {
+            background: rgba(108,99,255,0.07);
+            border: 1px solid rgba(108,99,255,0.25);
+        }
+        .demo-panel.state-generated {
+            background: rgba(56,217,169,0.06);
+            border: 1px solid rgba(56,217,169,0.2);
+        }
+        .demo-panel.state-approved {
+            background: rgba(240,180,41,0.07);
+            border: 1px solid rgba(240,180,41,0.2);
+        }
+        .demo-panel-left h2 { font-size: 1.15rem; font-weight: 700; margin-bottom: 0.4rem; }
+        .demo-panel-left p  { font-size: 0.85rem; color: var(--muted); max-width: 420px; }
+        .demo-panel-actions { display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: center; }
+
+        /* STATE CHIP */
+        .state-chip {
+            display: inline-block; padding: 0.3rem 0.8rem;
+            border-radius: 999px; font-size: 0.72rem; font-weight: 700;
+            letter-spacing: 0.06em; text-transform: uppercase;
+        }
+        .chip-not_generated { background: rgba(139,143,168,0.1); color: var(--muted); }
+        .chip-generated     { background: rgba(108,99,255,0.14); color: var(--accent); }
+        .chip-approved      { background: rgba(56,217,169,0.14); color: var(--green); }
+        .chip-sent          { background: rgba(240,180,41,0.12); color: var(--gold); }
+
+        /* BUTTONS */
+        .btn {
+            display: inline-flex; align-items: center; gap: 0.4rem;
+            padding: 0.7rem 1.4rem; border-radius: 7px; font-size: 0.875rem;
+            font-weight: 700; font-family: inherit; cursor: pointer;
+            border: none; text-decoration: none; transition: opacity 0.18s, transform 0.15s;
+        }
+        .btn:hover:not(:disabled) { opacity: 0.85; transform: translateY(-1px); }
+        .btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+        .btn-generate { background: var(--accent); color: #fff; }
+        .btn-demo     { background: rgba(56,217,169,0.14); color: var(--green); border: 1px solid rgba(56,217,169,0.25); }
+        .btn-approve  { background: rgba(240,180,41,0.12); color: var(--gold); border: 1px solid rgba(240,180,41,0.25); }
+        .btn-copy     { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+        .btn-regen    { background: transparent; color: var(--muted); border: 1px solid var(--border); font-size: 0.78rem; padding: 0.5rem 0.9rem; }
+
+        /* GRID */
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; margin-bottom: 1.25rem; }
+        @media (max-width: 700px) { .grid-2 { grid-template-columns: 1fr; } }
+
+        /* SIGNALS */
+        .signal-list { display: flex; flex-direction: column; gap: 0.7rem; }
+        .signal {
+            display: flex; align-items: center; gap: 0.75rem;
+            padding: 0.75rem 0.9rem; border-radius: 8px; font-size: 0.85rem;
+        }
+        .signal-icon { font-size: 1rem; flex-shrink: 0; }
+        .signal-text { flex: 1; }
+        .signal-pts  { font-size: 0.72rem; font-weight: 700; padding: 0.18rem 0.5rem; border-radius: 4px; }
+        .signal-bad { background: rgba(255,107,107,0.07); border: 1px solid rgba(255,107,107,0.15); }
+        .signal-bad .signal-pts { background: rgba(255,107,107,0.15); color: var(--red); }
+        .signal-ok  { background: rgba(56,217,169,0.05); border: 1px solid rgba(56,217,169,0.1); }
+        .signal-ok .signal-pts  { background: rgba(56,217,169,0.1); color: var(--green); }
+
+        /* INFO LIST */
+        .info-list { display: flex; flex-direction: column; gap: 0.55rem; }
+        .info-row  { display: flex; gap: 0.6rem; font-size: 0.855rem; }
+        .info-label { color: var(--muted); min-width: 80px; flex-shrink: 0; font-size: 0.8rem; }
+        .info-val   { color: var(--text); word-break: break-all; }
+        .info-val a { color: var(--accent); text-decoration: none; }
+        .info-val a:hover { text-decoration: underline; }
+        .info-val.missing { color: var(--red); font-style: italic; font-size: 0.8rem; }
+
+        /* REVIEWS */
+        .review-list { display: flex; flex-direction: column; gap: 0.7rem; }
+        .review-item {
+            background: var(--surface2); border-radius: 8px;
+            padding: 0.85rem 1rem; font-size: 0.83rem; color: var(--muted);
+            line-height: 1.65; font-style: italic;
+            border-left: 2px solid var(--border);
+        }
+        .review-author { font-style: normal; font-size: 0.72rem; font-weight: 700;
+            color: var(--accent); margin-top: 0.4rem; display: block; }
+
+        /* TOAST */
+        #toast {
+            position: fixed; bottom: 2rem; left: 50%;
+            transform: translateX(-50%) translateY(20px);
+            background: var(--surface2); border: 1px solid var(--border);
+            color: var(--text); padding: 0.7rem 1.4rem; border-radius: 8px;
+            font-size: 0.83rem; font-weight: 500;
+            opacity: 0; transition: opacity 0.25s, transform 0.25s;
+            pointer-events: none; z-index: 9999; white-space: nowrap;
+        }
+        #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+    </style>
+</head>
+<body>
+<div class="container">
+
+    <a href="/" class="back-btn">← Back to dashboard</a>
+
+    <!-- LEAD HEADER -->
+    <div class="lead-header">
+        <div>
+            <div class="lead-name">{{ lead.name }}</div>
+            <div class="lead-meta">
+                {% if lead.city     %}<span class="meta-tag">📍 {{ lead.city }}</span>{% endif %}
+                {% if lead.category %}<span class="meta-tag">🏷 {{ lead.category }}</span>{% endif %}
+                {% if lead.rating   %}<span class="meta-tag">★ {{ "%.1f" | format(lead.rating | float) }}</span>{% endif %}
+                {% if lead.reviews_count %}<span class="meta-tag">{{ lead.reviews_count }} reviews</span>{% endif %}
+                {% if lead.photos   %}<span class="meta-tag">📷 {{ lead.photos | length }} photos</span>{% endif %}
+            </div>
+        </div>
+        <div class="score-big {{ lead.score_class }}">
+            <span class="num">{{ lead.score }}</span>
+            <span class="lbl">{{ lead.score_label }}</span>
+        </div>
+    </div>
+
+    <!-- DEMO ACTION PANEL -->
+    <div class="demo-panel state-{{ demo_state }}" id="demoPanel">
+        <div class="demo-panel-left">
+            {% if demo_state == 'not_generated' %}
+            <h2>🚀 Generate Demo Site</h2>
+            <p>Build a premium preview using real data from this listing — real photos, real reviews, real address.</p>
+
+            {% elif demo_state == 'generated' %}
+            <h2>✅ Demo Ready</h2>
+            <p>Built using real Google Maps data.
+               {% if demo_meta and demo_meta.generated_at %}
+               Generated {{ demo_meta.generated_at[:10] }}.
+               {% endif %}
+               Open and review it, then approve to share.
+            </p>
+
+            {% elif demo_state == 'approved' %}
+            <h2>✅ Approved — Ready to Send</h2>
+            <p>This demo has been approved.
+               {% if demo_meta and demo_meta.approved_at %}
+               Approved on {{ demo_meta.approved_at[:10] }}.
+               {% endif %}
+               Copy the link and send it to the client.
+            </p>
+            {% endif %}
+        </div>
+
+        <div class="demo-panel-actions">
+            <span class="state-chip chip-{{ demo_state }}">
+                {% if demo_state == 'not_generated' %}Not generated
+                {% elif demo_state == 'generated' %}Generated
+                {% elif demo_state == 'approved' %}Approved
+                {% elif demo_state == 'sent' %}Sent
+                {% endif %}
+            </span>
+
+            {% if demo_state == 'not_generated' %}
+            <button class="btn btn-generate" id="generateBtn"
+                    onclick="generateDemo('{{ lead.slug }}')">
+                🚀 Generate Demo
+            </button>
+
+            {% elif demo_state == 'generated' %}
+            <a href="{{ site_url }}/demo/{{ lead.slug }}" target="_blank" class="btn btn-demo">
+                🔗 Open Demo
+            </a>
+            <button class="btn btn-approve" id="approveBtn"
+                    onclick="approveDemo('{{ lead.slug }}')">
+                ✓ Approve
+            </button>
+            <button class="btn btn-regen"
+                    onclick="regenDemo('{{ lead.slug }}')">
+                ↺ Rebuild
+            </button>
+
+            {% elif demo_state == 'approved' %}
+            <a href="{{ site_url }}/demo/{{ lead.slug }}" target="_blank" class="btn btn-demo">
+                🔗 Open Demo
+            </a>
+            <button class="btn btn-copy" onclick="copyLink('{{ lead.slug }}')">
+                📋 Copy Link
+            </button>
+            <button class="btn btn-regen"
+                    onclick="regenDemo('{{ lead.slug }}')">
+                ↺ Rebuild
+            </button>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- SIGNALS + CONTACT -->
+    <div class="grid-2">
+
+        <div class="card">
+            <h3>Opportunity Signals</h3>
+            <div class="signal-list">
+
+                {% if not lead.website %}
+                <div class="signal signal-bad">
+                    <span class="signal-icon">🌐</span>
+                    <span class="signal-text">No website found</span>
+                    <span class="signal-pts">+5 pts</span>
+                </div>
+                {% else %}
+                <div class="signal signal-ok">
+                    <span class="signal-icon">🌐</span>
+                    <span class="signal-text">Has website</span>
+                    <span class="signal-pts">+0</span>
+                </div>
+                {% endif %}
+
+                {% if lead.rating and lead.rating | float < 4.2 %}
+                <div class="signal signal-bad">
+                    <span class="signal-icon">⭐</span>
+                    <span class="signal-text">Low rating ({{ "%.1f" | format(lead.rating | float) }})</span>
+                    <span class="signal-pts">+2 pts</span>
+                </div>
+                {% else %}
+                <div class="signal signal-ok">
+                    <span class="signal-icon">⭐</span>
+                    <span class="signal-text">Rating: {{ "%.1f" | format(lead.rating | float) if lead.rating else "N/A" }}</span>
+                    <span class="signal-pts">+0</span>
+                </div>
+                {% endif %}
+
+                {% if (lead.reviews_count or 0) | int < 50 %}
+                <div class="signal signal-bad">
+                    <span class="signal-icon">💬</span>
+                    <span class="signal-text">Few reviews ({{ lead.reviews_count or 0 }})</span>
+                    <span class="signal-pts">+2 pts</span>
+                </div>
+                {% else %}
+                <div class="signal signal-ok">
+                    <span class="signal-icon">💬</span>
+                    <span class="signal-text">{{ lead.reviews_count }} reviews</span>
+                    <span class="signal-pts">+0</span>
+                </div>
+                {% endif %}
+
+                {% if not lead.phone %}
+                <div class="signal signal-bad">
+                    <span class="signal-icon">📞</span>
+                    <span class="signal-text">No phone listed</span>
+                    <span class="signal-pts">+1 pt</span>
+                </div>
+                {% else %}
+                <div class="signal signal-ok">
+                    <span class="signal-icon">📞</span>
+                    <span class="signal-text">Has phone</span>
+                    <span class="signal-pts">+0</span>
+                </div>
+                {% endif %}
+
+            </div>
+        </div>
+
+        <div class="card">
+            <h3>Contact Information</h3>
+            <div class="info-list">
+                <div class="info-row">
+                    <span class="info-label">Name</span>
+                    <span class="info-val">{{ lead.name }}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">City</span>
+                    <span class="info-val">{{ lead.city or '—' }}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Address</span>
+                    <span class="info-val">{{ lead.address or '—' }}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Phone</span>
+                    <span class="info-val {% if not lead.phone %}missing{% endif %}">
+                        {% if lead.phone %}<a href="tel:{{ lead.phone }}">{{ lead.phone }}</a>
+                        {% else %}Not listed{% endif %}
+                    </span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Website</span>
+                    <span class="info-val {% if not lead.website %}missing{% endif %}">
+                        {% if lead.website %}
+                            <a href="{{ lead.website }}" target="_blank">{{ lead.website }}</a>
+                        {% else %}No website — opportunity!{% endif %}
+                    </span>
+                </div>
+                {% if lead.photos %}
+                <div class="info-row">
+                    <span class="info-label">Photos</span>
+                    <span class="info-val">{{ lead.photos | length }} from Google Maps</span>
+                </div>
+                {% endif %}
+                {% if lead.google_maps_url %}
+                <div class="info-row">
+                    <span class="info-label">Maps</span>
+                    <span class="info-val">
+                        <a href="{{ lead.google_maps_url }}" target="_blank">View on Google Maps ↗</a>
+                    </span>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- REAL REVIEWS FROM APIFY -->
+    {% if lead.reviews %}
+    <div class="card">
+        <h3>Real Reviews from Google Maps ({{ lead.reviews | length }} collected)</h3>
+        <div class="review-list">
+            {% for r in lead.reviews[:5] %}
+            <div class="review-item">
+                "{{ r.text }}"
+                <span class="review-author">— {{ r.author }}{% if r.rating %} · {{ '★' * r.rating | int }}{% endif %}</span>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% elif lead.reviews_text %}
+    <div class="card">
+        <h3>Review Excerpts ({{ lead.reviews_text | length }} collected)</h3>
+        <div class="review-list">
+            {% for text in lead.reviews_text[:5] %}
+            <div class="review-item">"{{ text }}"</div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+</div>
+
+<div id="toast"></div>
+
+<script>
+const slug = "{{ lead.slug }}";
+
+function showToast(msg, duration = 3500) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), duration);
+}
+
+async function generateDemo(slug) {
+    const btn = document.getElementById('generateBtn');
+    btn.disabled = true;
+    btn.textContent = '⏳ Generating…';
+    try {
+        const r = await fetch(`/generate-demo/${slug}`, { method: 'POST' });
+        const d = await r.json();
+        if (d.ok) {
+            showToast('✅ Demo generated! Refreshing…');
+            setTimeout(() => location.reload(), 1200);
+        } else {
+            btn.disabled = false;
+            btn.textContent = '🚀 Generate Demo';
+            showToast(`❌ Error: ${d.error}`);
+        }
+    } catch (e) {
+        btn.disabled = false;
+        btn.textContent = '🚀 Generate Demo';
+        showToast('❌ Request failed');
+    }
+}
+
+async function approveDemo(slug) {
+    const btn = document.getElementById('approveBtn');
+    btn.disabled = true;
+    btn.textContent = '⏳…';
+    try {
+        const r = await fetch(`/approve/${slug}`, { method: 'POST' });
+        const d = await r.json();
+        if (d.ok) {
+            showToast('✅ Approved! Refreshing…');
+            setTimeout(() => location.reload(), 1200);
+        } else {
+            btn.disabled = false;
+            btn.textContent = '✓ Approve';
+            showToast(`❌ ${d.error}`);
+        }
+    } catch (e) {
+        btn.disabled = false;
+        btn.textContent = '✓ Approve';
+        showToast('❌ Request failed');
+    }
+}
+
+async function regenDemo(slug) {
+    if (!confirm('Rebuild the demo? This will overwrite the existing one.')) return;
+    try {
+        const r = await fetch(`/generate-demo/${slug}?force=true`, { method: 'POST' });
+        const d = await r.json();
+        if (d.ok) {
+            showToast('✅ Demo rebuilt! Refreshing…');
+            setTimeout(() => location.reload(), 1200);
+        } else {
+            showToast(`❌ ${d.error}`);
+        }
+    } catch (e) {
+        showToast('❌ Request failed');
+    }
+}
+
+function copyLink(slug) {
+    const url = `{{ site_url }}/demo/${slug}`;
+    navigator.clipboard.writeText(url).then(() => {
+        showToast(`📋 Copied: ${url}`);
+    }).catch(() => {
+        prompt('Copy this link:', url);
+    });
+}
+</script>
+</body>
+</html>

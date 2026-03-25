@@ -54,6 +54,14 @@ RULES:
 - Focus on what customers care about (quality, speed, trust, results)
 - Include location context naturally if possible
 {rating_note}
+HERO LINE RULE: Must include at least one of: (a) specific location name, (b) specific product or service, (c) clear customer outcome. Never write a line that could apply to any business. Good examples: "{location_example}'s go-to spot for breakfast & artisan coffee", "Fast, reliable car repairs trusted across {location_example}", "Precision cuts and colour for {location_example} locals".
+
+OFFERS RULE: If the reviews mention specific items, dishes, services, or products by name, prioritise those in the offers list. Pull from reality, not from generic category defaults.
+
+PROMO RULE: Always generate a promo line. Keep it simple, realistic, and action-oriented. Examples: "Free coffee with any breakfast before 10am", "Book today and get 10% off your first visit", "Same-day service available". Only skip if the category is strictly non-promotional.
+
+CTA LINE RULE: Write a short line (max 8 words) that combines a clear ACTION + a specific OUTCOME. The formula is: verb + what happens. Never write a generic command. Good examples: "Message us to book today", "Get a quick quote now", "Reserve your table in seconds", "Check availability instantly", "Book your appointment in seconds".
+
 OUTPUT FORMAT — use EXACTLY these headers, nothing else:
 
 1. HERO LINE (max 12 words)
@@ -67,8 +75,11 @@ OUTPUT FORMAT — use EXACTLY these headers, nothing else:
 - [item]
 - [item]
 
-4. OPTIONAL PROMO (1 line, or write None if not relevant)
+4. PROMO (1 punchy line — always required)
 [your promo line here]
+
+5. SHORT CTA LINE (max 8 words)
+[your cta line here]
 
 Make outputs match the business category: {category}"""
 
@@ -93,7 +104,7 @@ def _call_claude(prompt: str) -> str | None:
             },
             json={
                 "model":      "claude-haiku-4-5-20251001",   # fast + cheap
-                "max_tokens": 450,
+                "max_tokens": 600,
                 "messages":   [{"role": "user", "content": prompt}],
             },
             timeout=18,
@@ -118,7 +129,7 @@ def _parse_output(raw: str) -> dict:
     Parse the structured LLM response into a clean dict.
     Robust to minor formatting variations.
     """
-    result: dict = {"hero_line": "", "trust_benefit": "", "offers": [], "promo": ""}
+    result: dict = {"hero_line": "", "trust_benefit": "", "offers": [], "promo": "", "cta_line": ""}
 
     lines = raw.splitlines()
     current_section = None
@@ -128,8 +139,8 @@ def _parse_output(raw: str) -> dict:
         if not stripped:
             continue
 
-        # Detect section headers  e.g. "1. HERO LINE" or "1. HERO LINE (max 12 words)"
-        sec_match = re.match(r'^(\d)\.\s*(HERO|TRUST|WHAT|OPTIONAL)', stripped, re.IGNORECASE)
+        # Detect section headers  e.g. "1. HERO LINE" or "4. PROMO" or "5. SHORT CTA LINE"
+        sec_match = re.match(r'^(\d)\.\s*(HERO|TRUST|WHAT|OPTIONAL|PROMO|SHORT)', stripped, re.IGNORECASE)
         if sec_match:
             current_section = int(sec_match.group(1))
             continue
@@ -157,6 +168,11 @@ def _parse_output(raw: str) -> dict:
             if promo and promo.lower() not in {"none", "n/a", "-", "not applicable", "no", ""}:
                 result["promo"] = promo
 
+        elif current_section == 5 and not result["cta_line"]:
+            cta = _clean(stripped)
+            if cta and len(cta) > 4:
+                result["cta_line"] = cta
+
     return result
 
 
@@ -174,7 +190,7 @@ def generate_ai_content(
     Generate AI-powered copy for a local business.
 
     Returns a dict with keys:
-        hero_line, trust_benefit, offers (list), promo
+        hero_line, trust_benefit, offers (list), promo, cta_line
 
     Returns None if:
     - ANTHROPIC_API_KEY is not set
@@ -214,14 +230,18 @@ def generate_ai_content(
     else:
         rating_note = ""
 
+    # Extract city name for use in hero line examples
+    location_example = (location or "South Africa").split(",")[0].strip()
+
     prompt = _MASTER_PROMPT.format(
-        business_name = name,
-        category      = category or "Local Business",
-        rating        = f"{score:.1f}" if score else "N/A",
-        review_count  = review_count or "Unknown",
-        reviews       = reviews_str,
-        location      = location or "South Africa",
-        rating_note   = rating_note + "\n" if rating_note else "",
+        business_name    = name,
+        category         = category or "Local Business",
+        rating           = f"{score:.1f}" if score else "N/A",
+        review_count     = review_count or "Unknown",
+        reviews          = reviews_str,
+        location         = location or "South Africa",
+        location_example = location_example,
+        rating_note      = rating_note + "\n" if rating_note else "",
     )
 
     print(f"[AI Content] Generating copy for: {name}")

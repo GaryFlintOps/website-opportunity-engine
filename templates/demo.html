@@ -66,8 +66,66 @@
      PREVIEW BANNER
 ──────────────────────────────────────────────────────────── -->
 <div class="preview-bar text-center py-2 px-4 text-xs tracking-wide text-white/70">
-  ✦ <span class="font-semibold text-white">Free website preview</span>
-  — this is what <strong>{{ name }}</strong>'s website could look like
+  ✦ <span class="font-semibold text-white">Your upgraded online presence</span>
+  — <strong>{{ name }}</strong>, this was built specifically for you
+</div>
+<div class="text-center py-2 px-4 text-xs text-gray-300" style="background:#1a1f2e">
+  {% if "coffee" in category|lower or "cafe" in category|lower or "restaurant" in category|lower or "bakery" in category|lower %}
+  People are searching for you right now — and finding competitors instead
+  {% elif "salon" in category|lower or "barber" in category|lower or "spa" in category|lower %}
+  No WhatsApp = lost bookings every day
+  {% elif "mechanic" in category|lower or "auto" in category|lower or "plumber" in category|lower or "electrician" in category|lower %}
+  Customers are searching — but not converting without a website
+  {% else %}
+  You're missing customers searching for you right now
+  {% endif %}
+</div>
+
+
+<!-- ════════════════════════════════════════════════════════════
+     DIAGNOSTIC STRIP · WEBSITE CHECK
+════════════════════════════════════════════════════════════ -->
+<div class="bg-gray-950 border-b border-gray-800">
+  <div class="max-w-page mx-auto px-6 md:px-12 py-3 flex flex-wrap items-center justify-between gap-3">
+
+    <!-- Status checks -->
+    <div class="flex flex-wrap items-center gap-x-5 gap-y-1.5">
+      <span class="text-xs font-extrabold tracking-widest uppercase text-gray-500">Website Check</span>
+
+      {% if website_status == "none" %}
+      <span class="text-xs font-semibold text-red-400">❌ No website</span>
+      {% elif website_status == "basic" %}
+      <span class="text-xs font-semibold text-yellow-400">⚠️ Basic website (not optimised)</span>
+      {% else %}
+      <span class="text-xs font-semibold text-gray-500">⚠️ Website status unknown</span>
+      {% endif %}
+
+      {% if not has_whatsapp %}
+      <span class="text-xs font-semibold text-red-400">❌ No WhatsApp contact</span>
+      {% else %}
+      <span class="text-xs font-semibold text-green-400">✅ WhatsApp active</span>
+      {% endif %}
+
+      {% if strong_reviews %}
+      <span class="text-xs font-semibold text-yellow-400">⚠️ Strong reviews not being used</span>
+      {% else %}
+      <span class="text-xs font-semibold text-gray-500">⚠️ Reviews not being leveraged</span>
+      {% endif %}
+    </div>
+
+    <!-- Opportunity score badge -->
+    <div class="flex items-center gap-2 flex-shrink-0">
+      <span class="text-xs text-gray-500 font-semibold tracking-wide">Opportunity</span>
+      <span class="px-2.5 py-1 rounded-full text-xs font-extrabold tracking-wide
+        {% if opportunity_label == 'High' %}bg-green-500/20 text-green-400 border border-green-500/30
+        {% elif opportunity_label == 'Medium' %}bg-amber-500/20 text-amber-400 border border-amber-500/30
+        {% else %}bg-gray-700/40 text-gray-400 border border-gray-600/30
+        {% endif %}">
+        {{ opportunity_score }}/10 · {{ opportunity_label }}
+      </span>
+    </div>
+
+  </div>
 </div>
 
 
@@ -101,10 +159,26 @@
     </div>
     {% endif %}
 
+    <!-- Rating badge (shown above name when rating is notably high or for local framing) -->
+    {% if rating_badge == "highly_rated" %}
+    <div class="inline-flex items-center gap-1.5 mb-3 px-3 py-1 rounded-full text-xs font-bold
+                bg-yellow-400/20 border border-yellow-400/40 text-yellow-300">
+      ⭐ Highly rated by customers
+    </div>
+    {% elif rating_badge == "local" %}
+    <div class="inline-flex items-center gap-1.5 mb-3 px-3 py-1 rounded-full text-xs font-bold
+                bg-white/10 border border-white/25 text-white/80">
+      📍 Convenient local service
+    </div>
+    {% endif %}
+
     <!-- Business name -->
-    <h1 class="text-4xl md:text-6xl lg:text-7xl font-black text-white leading-[1.02] tracking-tight mb-4">
+    <h1 class="text-4xl md:text-6xl lg:text-7xl font-black text-white leading-[1.02] tracking-tight mb-2">
       {{ name }}
     </h1>
+    {% if city %}
+    <div class="text-sm text-white/50 mb-4 font-medium tracking-wide">📍 Based in {{ city }}</div>
+    {% endif %}
 
     <!-- Short description -->
     {% if about_text %}
@@ -113,6 +187,16 @@
     </p>
     {% elif tagline %}
     <p class="text-white/70 text-base md:text-lg font-light max-w-xl leading-relaxed mb-6">{{ tagline }}</p>
+    {% endif %}
+
+    <!-- Real review snippet from Google -->
+    {% if hero_review %}
+    <div class="flex items-center gap-2 mb-5 max-w-lg">
+      <span class="text-yellow-400 text-sm flex-shrink-0">★★★★★</span>
+      <p class="text-sm text-white/75 italic">"{{ hero_review }}"
+        <span class="not-italic text-white/40 text-xs">— Google review</span>
+      </p>
+    </div>
     {% endif %}
 
     <!-- Action buttons -->
@@ -129,6 +213,19 @@
          class="inline-flex items-center gap-2 font-semibold text-sm rounded-full px-6 py-3 text-white border-2 border-white/40 backdrop-blur-sm transition-all hover:bg-white/15">
         View Services ↓
       </a>
+    </div>
+
+    <!-- CTA micro-line under buttons -->
+    {% if cta_line %}
+    <p class="text-white/50 text-xs font-medium mt-1 mb-4 tracking-wide">
+      → {{ cta_line }}
+    </p>
+    {% endif %}
+
+    <!-- Missed enquiries line -->
+    <div class="flex items-center gap-2 mb-3 text-xs text-white/40 font-medium">
+      <span class="text-red-400">●</span>
+      Estimated missed enquiries: 10–30 per month without a digital presence
     </div>
 
     <!-- Rating row -->
@@ -262,9 +359,13 @@
      PROMO BANNER (AI-generated offer/hook — hidden if empty)
 ════════════════════════════════════════════════════════════ -->
 {% if promo %}
-<div class="py-4 px-6 text-center text-sm font-bold text-white tracking-wide"
-     style="background:var(--accent)">
-  ⚡&nbsp; {{ promo }}
+<div style="background:var(--accent)">
+  <div class="text-center pt-2 text-xs uppercase tracking-widest text-white/50 font-semibold">
+    Example promotion
+  </div>
+  <div class="py-3 px-6 text-center text-sm font-bold text-white tracking-wide">
+    ⚡&nbsp; {{ promo }}
+  </div>
 </div>
 {% endif %}
 
@@ -409,7 +510,12 @@
         <!-- CTA box -->
         <div class="rounded-2xl p-6 text-white mt-2" style="background:var(--primary)">
           <p class="text-lg font-extrabold mb-1">Ready to visit?</p>
-          <p class="text-sm text-white/60 mb-4">Message us on WhatsApp — fast response, no booking needed.</p>
+          <p class="text-sm text-white/60 mb-1">Message us on WhatsApp — fast response, no booking needed.</p>
+          {% if cta_line %}
+          <p class="text-sm font-semibold text-white/80 mb-4">→ {{ cta_line }}</p>
+          {% else %}
+          <div class="mb-4"></div>
+          {% endif %}
           {% if wa_url %}
           <a href="{{ wa_url }}" target="_blank" rel="noopener"
              class="inline-flex items-center gap-2 font-bold text-sm rounded-full px-6 py-3 text-white transition-all hover:brightness-110"
@@ -422,6 +528,7 @@
             <span>⚡ Fast response</span>
             <span>📅 No booking needed</span>
           </div>
+          <p class="text-xs text-white/25 mt-2">Takes less than 24 hours to set up</p>
         </div>
 
       </div>

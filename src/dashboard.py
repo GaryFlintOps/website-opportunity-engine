@@ -447,6 +447,25 @@ async def render_demo(request: Request, slug: str):
     raw_gallery = data.get("gallery_images", [])
     all_gallery  = [_proxy_url(u) for u in raw_gallery if u]
 
+    # Hero review snippet — shortest meaningful 5-star review, capped at ~10 words
+    def _pick_hero_review(revs: list[dict]) -> str:
+        five_star = [r for r in revs if int(r.get("rating", 0)) >= 5]
+        pool = five_star if five_star else revs
+        best = ""
+        for r in pool:
+            text = r.get("text", "").strip()
+            if len(text) < 8:
+                continue
+            # First sentence only
+            sentence = text.split(".")[0].split("!")[0].split("?")[0].strip()
+            words = sentence.split()
+            snippet = " ".join(words[:10]) + ("…" if len(words) > 10 else "")
+            if not best or len(snippet) < len(best):
+                best = snippet
+        return best
+
+    hero_review = _pick_hero_review(reviews)
+
     # Menu module — comes from demo JSON "menu" key; disabled by default
     menu_data    = data.get("menu")           # None or {sections:[{title,items:[{name,price?}]}]}
     modules_cfg  = data.get("modules", {})    # {menu: bool}
@@ -480,6 +499,16 @@ async def render_demo(request: Request, slug: str):
         "feature_pills":  data.get("feature_pills", []),
         "cta_label":      data.get("cta_label", "Get in Touch"),
         "promo":          data.get("promo", ""),
+        "cta_line":       data.get("cta_line", ""),
+        "rating_badge":   data.get("rating_badge", ""),
+        "hero_review":    hero_review,
+        # Diagnostic intelligence
+        "has_website":       data.get("has_website", False),
+        "website_status":    data.get("website_status", "unknown"),
+        "has_whatsapp":      data.get("has_whatsapp", False),
+        "strong_reviews":    data.get("strong_reviews", False),
+        "opportunity_score": data.get("opportunity_score", 0),
+        "opportunity_label": data.get("opportunity_label", "Low"),
         # Menu module
         "menu_enabled":   menu_enabled,
         "menu":           menu_data or {},

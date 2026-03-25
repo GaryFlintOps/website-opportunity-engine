@@ -279,10 +279,62 @@ def build_business_data(lead: dict, industry: str) -> dict:
         if ai["offers"]:
             services = ai["offers"]             # replaces static services list
         promo    = ai.get("promo", "")
+        cta_line = ai.get("cta_line", "")       # short action line under hero buttons
         ai_trust = ai.get("trust_benefit", "")  # overrides feature_stat if present
     else:
         promo    = ""
+        cta_line = ""
         ai_trust = ""
+
+    # Rating badge — surfaced visually in hero section
+    try:
+        _score = float(rating) if rating else 0.0
+    except (TypeError, ValueError):
+        _score = 0.0
+    if _score >= 4.5:
+        rating_badge = "highly_rated"   # template shows ⭐ badge
+    elif _score > 0 and _score < 4.0:
+        rating_badge = "local"          # template shows 📍 badge
+    else:
+        rating_badge = ""               # no badge
+
+    # ── DIAGNOSTIC / OPPORTUNITY FIELDS ────────────────────────────────────
+    # Website detection
+    _raw_website = (lead.get("website") or "").strip()
+    has_website    = bool(_raw_website)
+    website_url    = _raw_website if has_website else None
+    website_status = "none" if not has_website else "basic"   # 'none' | 'basic' | 'unknown'
+
+    # WhatsApp: default False unless lead data explicitly says otherwise.
+    # Lead data may carry has_whatsapp from the scorer; preserve it if present.
+    _lead_wa = lead.get("has_whatsapp")
+    has_whatsapp = bool(_lead_wa) if _lead_wa is not None else False
+
+    # Review utilisation: meaningful social proof exists
+    try:
+        _rc = int(reviews_count) if reviews_count else 0
+        _rt = float(rating) if rating else 0.0
+    except (TypeError, ValueError):
+        _rc, _rt = 0, 0.0
+    strong_reviews = (_rt >= 4.2 and _rc >= 30)
+
+    # Opportunity score
+    _opp = 0
+    if not has_website:
+        _opp += 3
+    else:
+        _opp += 1   # still an opportunity even with a basic site
+    if not has_whatsapp:
+        _opp += 3
+    if strong_reviews:
+        _opp += 1
+    opportunity_score = min(_opp, 10)
+    if opportunity_score >= 7:
+        opportunity_label = "High"
+    elif opportunity_score >= 4:
+        opportunity_label = "Medium"
+    else:
+        opportunity_label = "Low"
 
     # ── BRANDING FIELDS ──────────────────────────────────────────────────────
     colors         = _resolve(INDUSTRY_COLORS,         DEFAULT_COLORS,         category, industry)
@@ -325,6 +377,16 @@ def build_business_data(lead: dict, industry: str) -> dict:
         "feature_pills":  feature_pills,
         "cta_label":      cta_label,
         # AI copy
-        "promo":          promo,           # optional promo banner (empty = hidden)
+        "promo":          promo,           # promo banner (always generated when AI active)
+        "cta_line":       cta_line,        # short action line e.g. "Message us to book instantly"
+        "rating_badge":   rating_badge,    # "highly_rated" | "local" | ""
         "ai_generated":   bool(ai),        # flag: True when AI copy was used
+        # Diagnostic / opportunity intelligence
+        "has_website":        has_website,
+        "website_url":        website_url,
+        "website_status":     website_status,
+        "has_whatsapp":       has_whatsapp,
+        "strong_reviews":     strong_reviews,
+        "opportunity_score":  opportunity_score,
+        "opportunity_label":  opportunity_label,
     }

@@ -1,7 +1,7 @@
 {
   "slug": "lakeside-cafe-coffee-pmb",
   "state": "generated",
-  "generated_at": "2026-03-24T12:46:36.683917",
+  "generated_at": "2026-03-25T11:20:09.490228",
   "approved_at": "",
   "business_data": {
     "name": "Lakeside Cafe - Coffee PMB",
@@ -13,7 +13,7 @@
     "reviews_count": 1138,
     "category": "Coffee store",
     "google_maps_url": "https://www.google.com/maps/search/?api=1&query=Lakeside%20Cafe%20-%20Coffee%20PMB&query_place_id=ChIJK6RyZp289h4RLVLTw53oUCY",
-    "place_id": "ChIJK6RyZp289h4RLVLTw53oUCY",
+    "place_id": "",
     "hero_image": "https://lh3.googleusercontent.com/p/AF1QipNhtuKNI0pRcHXY2e0VxDd5akTC-DOG_eqMMOkX=w1920-h1080-k-no",
     "gallery_images": [
       "https://lh3.googleusercontent.com/gps-cs-s/AHVAwepR6I5J6UE3jE_tJ9hM5Mp99joTuD1zalWp-vd9vD-Xrk5tWgj1I3RQlgl3Df0GBrFfFX9xQvbjnBpidh0kVAz8TTFX8WVxFc8IgRfA0UvtHlgK30hVYIUH4dUFbzPVI899HNvp9A=w1920-h1080-k-no",
@@ -22,7 +22,7 @@
       "https://lh3.googleusercontent.com/gps-cs-s/AHVAwerHOdRTSpoRINeTwAvOFPRbHCVGMCFi975AF_5c171C1bMDb-f2r_s33N533KZSXvQry-oIVRP0n-vr6b3FhaUwo5z2hMIUqRWY-IHArMRxGJpU-85euvgTJTJQPnVTWxRvd3ED=w1920-h1080-k-no",
       "https://lh3.googleusercontent.com/gps-cs-s/AHVAwep6bZLa_8AdeCf0qYdhB8yyd497F_V4TIFfbDKeeVCBxy09OuWHCxTGdQkBDT-u2VMUPdW6mm-ouZgLEMuSICx3vhP_itQ5W7Sx2FmrPzar5GcaPFP1xzGJz2CnUSpjn9i5fW2f=w1920-h1080-k-no"
     ],
-    "has_real_photos": true,
+    "has_real_photos": false,
     "reviews": [
       {
         "text": "The food was delicious and the service was good.",
@@ -46,7 +46,7 @@
       }
     ],
     "has_real_reviews": true,
-    "map_embed": "https://maps.google.com/maps?q=-29.58493,30.3752157&z=15&output=embed",
+    "map_embed": "https://maps.google.com/maps?q=Lakeside%20Cafe%20-%20Coffee%20PMB%2C%20Seattle%20Coffee%20Company%2C%209%20Armitage%20Rd%2C%20Town%20Hill%2C%20Pietermaritzburg%2C%203201%2C%20South%20Africa&output=embed",
     "tagline": "Your daily coffee, done right.",
     "services": [
       "Espresso & Pour Over",
@@ -54,6 +54,21 @@
       "Pastries & Light Bites",
       "Private Events"
     ],
-    "industry": "coffee shops"
+    "industry": "coffee shops",
+    "colors": {
+      "primary": "#3B1E0A",
+      "accent": "#C8973A",
+      "bg": "#FBF8F4",
+      "surface": "#F2EDE5"
+    },
+    "about_headline": "Where Every Cup Tells a Story",
+    "about_text": "Lakeside Cafe - Coffee PMB is Pietermaritzburg's favourite spot for exceptional coffee, homemade food, and a warm welcome every visit. With a 4.5-star rating across 1,138 Google reviews, our reputation speaks for itself.",
+    "feature_stat": "Free WiFi",
+    "feature_pills": [
+      "100% Arabica Beans",
+      "Fresh Daily Baking",
+      "Local Ingredients"
+    ],
+    "cta_label": "View Our Menu"
   }
 }

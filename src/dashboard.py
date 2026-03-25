@@ -1,5 +1,7 @@
 import os
-from fastapi import FastAPI, Request, Form, BackgroundTasks
+import asyncio
+import requests as _requests
+from fastapi import FastAPI, Request, Form, BackgroundTasks, Response
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 # CORSMiddleware intentionally not imported — all clients are same-origin
@@ -271,149 +273,217 @@ async def track_send(slug: str):
     return JSONResponse({"ok": True})
 
 
-# ── Demo: render HTML page directly from Render ───────────────────────────────
+# ── Image proxy ───────────────────────────────────────────────────────────────
+# Google's lh3.googleusercontent.com blocks direct browser requests.
+# We fetch server-side (no referrer restrictions) and stream back to the browser.
+
+_IMG_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/124.0.0.0 Safari/537.36"
+    ),
+    "Referer": "https://www.google.com/",
+}
+
+
+def _proxy_url(img_url: str) -> str:
+    """Wrap an external image URL with our server-side proxy endpoint."""
+    if not img_url:
+        return ""
+    return f"/img-proxy?url={_url_quote(img_url, safe='')}"
+
+
+@app.get("/img-proxy")
+async def img_proxy(url: str):
+    """Fetch an external image server-side and return it to the browser."""
+    def _fetch(u: str):
+        return _requests.get(u, headers=_IMG_HEADERS, timeout=12, allow_redirects=True)
+
+    try:
+        loop = asyncio.get_running_loop()
+        resp  = await loop.run_in_executor(None, _fetch, url)
+        if resp.status_code != 200:
+            print(f"[ImgProxy] HTTP {resp.status_code} for {url[:80]}")
+            return Response(content=b"", status_code=resp.status_code)
+        ctype = resp.headers.get("content-type", "image/jpeg")
+        return Response(
+            content=resp.content,
+            media_type=ctype,
+            headers={"Cache-Control": "public, max-age=86400"},
+        )
+    except Exception as e:
+        print(f"[ImgProxy] Error fetching {url[:80]}: {e}")
+        return Response(content=b"", status_code=502,
+                        headers={"X-Proxy-Error": str(e)})
+
+
+@app.get("/img-proxy-test")
+async def img_proxy_test():
+    """Quick check that the proxy can reach Google's image CDN."""
+    test_url = "https://lh3.googleusercontent.com/p/AF1QipPafQif1aK9uZL3MnWg-eUe3J2LFqPLheSCINoT=w400-h300-k-no"
+    def _fetch():
+        return _requests.get(test_url, headers=_IMG_HEADERS, timeout=10)
+    try:
+        loop = asyncio.get_running_loop()
+        resp = await loop.run_in_executor(None, _fetch)
+        return JSONResponse({
+            "ok": resp.status_code == 200,
+            "status": resp.status_code,
+            "content_type": resp.headers.get("content-type",""),
+            "bytes": len(resp.content),
+        })
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=502)
+
+
+# ── Demo: render HTML page via Jinja2 template ────────────────────────────────
+
+def _extract_highlights(reviews: list[dict]) -> list[dict]:
+    """
+    Pull 3 stand-out highlights from 5-star reviews.
+    Each highlight = {icon, title, quote} using keyword matching for
+    meaningful titles rather than raw first-words.
+    """
+    # Ordered priority: first keyword match wins the title for that review
+    KEYWORD_MAP = [
+        (["breakfast", "brunch"],                                                          "☀️",  "Breakfast Favourite"),
+        (["coffee", "espresso", "cappuccino", "latte", "flat white"],                     "☕",  "Perfect Coffee"),
+        (["food", "meal", "dish", "menu", "cuisine", "delicious", "tasty"],               "🍽️", "Exceptional Food"),
+        (["service", "staff", "waiter", "waitress", "attentive"],                         "🤝",  "Outstanding Service"),
+        (["friendly", "welcoming", "warm", "hospitable"],                                  "😊",  "Friendly Team"),
+        (["atmosphere", "ambiance", "vibe", "setting", "decor", "cosy", "cozy"],          "✨",  "Wonderful Atmosphere"),
+        (["value", "price", "affordable", "worth", "reasonable", "half price"],           "💰",  "Great Value"),
+        (["clean", "spotless", "hygienic", "tidy"],                                        "✨",  "Spotless & Clean"),
+        (["recommend", "favourite", "favorite", "best in"],                                "⭐",  "Highly Recommended"),
+        (["cut", "haircut", "hair", "style"],                                              "✂️",  "Expert Styling"),
+        (["massage", "facial", "spa", "relax", "treatment"],                              "💆",  "Relaxing Experience"),
+        (["workout", "gym", "training", "fitness", "classes"],                             "💪",  "Top-Class Training"),
+        (["fast", "quick", "efficient", "prompt"],                                         "⚡",  "Fast & Efficient"),
+        (["fresh", "quality", "organic", "homemade"],                                      "🌿",  "Premium Quality"),
+        (["view", "beautiful", "stunning", "gorgeous", "amazing"],                        "🌟",  "Simply Amazing"),
+    ]
+    FALLBACK_TITLES = ["Amazing Experience", "Worth Every Visit", "Truly Outstanding"]
+
+    five_star = [r for r in reviews if int(r.get("rating", 0)) >= 5]
+    if not five_star:
+        five_star = reviews
+
+    highlights = []
+    used_titles: set[str] = set()
+
+    for r in five_star[:10]:
+        text = r.get("text", "").strip()
+        if not text:
+            continue
+        text_lower = text.lower()
+
+        # First sentence, capped at 90 chars
+        sentence = text.split(".")[0].split("!")[0].split("?")[0].strip()
+        if len(sentence) > 90:
+            sentence = sentence[:87] + "…"
+        if len(sentence) < 10:
+            continue  # skip trivially short quotes
+
+        # Find best matching keyword group not yet used
+        matched_icon, matched_title = "🌟", None
+        for keywords, icon, title in KEYWORD_MAP:
+            if title in used_titles:
+                continue
+            for kw in keywords:
+                if kw in text_lower:
+                    matched_icon  = icon
+                    matched_title = title
+                    break
+            if matched_title:
+                break
+
+        # Fallback generic titles
+        if not matched_title:
+            for fb in FALLBACK_TITLES:
+                if fb not in used_titles:
+                    matched_title = fb
+                    matched_icon  = "🌟"
+                    break
+
+        if not matched_title or matched_title in used_titles:
+            continue
+
+        used_titles.add(matched_title)
+        highlights.append({"icon": matched_icon, "title": matched_title, "quote": sentence})
+
+        if len(highlights) == 3:
+            break
+
+    return highlights
+
 
 @app.get("/demo/{slug}", response_class=HTMLResponse)
-async def render_demo(slug: str):
-    """
-    Renders the demo page as a self-contained HTML response.
-    Served directly from Render — no external frontend required.
-    """
+async def render_demo(request: Request, slug: str):
+    """Render the business demo page using the modern Jinja2 template."""
     data = load_demo_data(slug)
     if data is None:
         return HTMLResponse(
-            f"<html><body style='font-family:Arial;padding:40px;background:#0f1117;color:#e4e6f0'>"
+            "<html><body style='font-family:Arial;padding:40px;background:#0d0f14;color:#f0f0f0'>"
             f"<h1>Demo not found</h1>"
             f"<p>No demo has been generated for <code>{slug}</code> yet.</p>"
-            f"<p><a href='/' style='color:#6c63ff'>← Back to dashboard</a></p>"
-            f"</body></html>",
+            f"<p><a href='/' style='color:#c9a96e'>← Back to dashboard</a></p>"
+            "</body></html>",
             status_code=404,
         )
 
-    name        = data.get("name", "Business")
-    tagline     = data.get("tagline", "")
-    address     = data.get("address", "")
-    phone       = data.get("phone", "")
-    website     = data.get("website", "")
-    rating      = data.get("rating", "")
-    rev_count   = data.get("reviews_count", "")
-    category    = data.get("category", "")
-    hero_image  = data.get("hero_image", "")
-    services    = data.get("services", [])
-    reviews     = data.get("reviews", [])
-    maps_url    = data.get("google_maps_url", "")
-    map_embed   = data.get("map_embed", "")
+    phone    = data.get("phone", "")
+    name     = data.get("name", "Business")
+    reviews  = data.get("reviews", [])
 
-    services_html = "".join(
-        f'<li style="padding:0.5rem 0;border-bottom:1px solid #2d3148">{s}</li>'
-        for s in services
-    )
-    reviews_html = "".join(
-        f'<div style="background:#22263a;border:1px solid #2d3148;border-radius:8px;padding:1rem;margin-bottom:0.75rem">'
-        f'<div style="color:#f0b429;margin-bottom:0.35rem">{"★" * int(r.get("rating",5))}</div>'
-        f'<p style="color:#e4e6f0;font-size:0.9rem;line-height:1.6">{r.get("text","")}</p>'
-        f'<p style="color:#8b8fa8;font-size:0.75rem;margin-top:0.5rem">— {r.get("author","")}</p>'
-        f'</div>'
-        for r in reviews[:4]
-    )
-    hero_section = (
-        f'<img src="{hero_image}" alt="{name}" '
-        f'style="width:100%;max-height:380px;object-fit:cover;border-radius:10px;margin-bottom:2rem" />'
-        if hero_image else ""
-    )
-    map_section = (
-        f'<div style="margin-top:2rem">'
-        f'<iframe src="{map_embed}" width="100%" height="300" style="border:0;border-radius:8px" '
-        f'allowfullscreen loading="lazy"></iframe></div>'
-        if map_embed else ""
-    )
-    website_link = (
-        f'<a href="{website}" target="_blank" rel="noopener" '
-        f'style="color:#6c63ff">{website}</a>'
-        if website else '<span style="color:#8b8fa8">No website yet</span>'
-    )
-    maps_link = (
-        f' &nbsp;·&nbsp; <a href="{maps_url}" target="_blank" rel="noopener" '
-        f'style="color:#6c63ff">View on Google Maps</a>'
-        if maps_url else ""
-    )
+    wa_url = build_whatsapp_url(
+        phone,
+        f"Hi {name}, I saw your listing and wanted to find out more!"
+    ) if phone else ""
 
-    html = f"""<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>{name}</title>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&display=swap" rel="stylesheet" />
-  <style>
-    *, *::before, *::after {{ box-sizing: border-box; margin: 0; padding: 0; }}
-    body {{
-      background: #0f1117; color: #e4e6f0;
-      font-family: 'Inter', sans-serif; min-height: 100vh;
-    }}
-    .notice {{
-      background: #1a1a2e; color: rgba(255,255,255,.72);
-      padding: 0.65rem 1.5rem; font-size: 0.78rem;
-      letter-spacing: 0.03em; text-align: center;
-      border-bottom: 1px solid rgba(201,169,110,.2);
-    }}
-    .notice strong {{ color: #c9a96e; }}
-    .container {{ max-width: 860px; margin: 0 auto; padding: 2.5rem 1.5rem 4rem; }}
-    h1 {{ font-size: clamp(1.9rem,4vw,2.8rem); font-weight: 800; letter-spacing: -0.02em; margin-bottom: 0.4rem; }}
-    .tagline {{ color: #8b8fa8; font-size: 1.05rem; margin-bottom: 1.75rem; }}
-    .meta {{ display:flex; flex-wrap:wrap; gap:0.6rem; margin-bottom: 2rem; }}
-    .chip {{
-      background: #22263a; border: 1px solid #2d3148;
-      border-radius: 5px; padding: 0.25rem 0.75rem;
-      font-size: 0.78rem; color: #8b8fa8;
-    }}
-    .chip.rating {{ color: #f0b429; }}
-    h2 {{ font-size: 1rem; font-weight: 700; color: #8b8fa8;
-          letter-spacing: 0.08em; text-transform: uppercase;
-          margin: 2rem 0 1rem; }}
-    ul {{ list-style: none; padding: 0; color: #e4e6f0; }}
-    .footer {{
-      margin-top: 3rem; padding-top: 1.5rem;
-      border-top: 1px solid #2d3148;
-      font-size: 0.78rem; color: #8b8fa8; text-align: center;
-    }}
-    @media (max-width: 600px) {{ .container {{ padding: 1.5rem 1rem 3rem; }} }}
-  </style>
-</head>
-<body>
-  <div class="notice">
-    ✦ <strong>This is a preview of how your business could look online</strong>
-    &nbsp;—&nbsp; powered by Website Opportunity Engine
-  </div>
-  <div class="container">
-    {hero_section}
-    <h1>{name}</h1>
-    <p class="tagline">{tagline}</p>
-    <div class="meta">
-      {f'<span class="chip">{category}</span>' if category else ''}
-      {f'<span class="chip rating">★ {rating} ({rev_count} reviews)</span>' if rating else ''}
-      {f'<span class="chip">📍 {address}</span>' if address else ''}
-      {f'<span class="chip">📞 {phone}</span>' if phone else ''}
-    </div>
-    {'<h2>Our Services</h2><ul>' + services_html + '</ul>' if services else ''}
-    {'<h2>What Customers Say</h2>' + reviews_html if reviews else ''}
-    <h2>Find Us</h2>
-    <p style="color:#e4e6f0;font-size:0.9rem">
-      {address}{maps_link}
-    </p>
-    <p style="margin-top:0.75rem;font-size:0.9rem">
-      🌐 {website_link}
-    </p>
-    {map_section}
-    <div class="footer">
-      Want a real website like this? Contact us today.
-      &nbsp;·&nbsp; <a href="/" style="color:#6c63ff">← Dashboard</a>
-    </div>
-  </div>
-</body>
-</html>"""
+    colors = data.get("colors") or {}
 
-    return HTMLResponse(html)
+    # Full gallery = all google images (hero excluded; already deduplicated in transformer)
+    raw_gallery = data.get("gallery_images", [])
+    all_gallery  = [_proxy_url(u) for u in raw_gallery if u]
+
+    # Menu module — comes from demo JSON "menu" key; disabled by default
+    menu_data    = data.get("menu")           # None or {sections:[{title,items:[{name,price?}]}]}
+    modules_cfg  = data.get("modules", {})    # {menu: bool}
+    menu_enabled = bool(modules_cfg.get("menu", False) and menu_data)
+
+    return templates.TemplateResponse("demo.html", {
+        "request":        request,
+        "name":           name,
+        "tagline":        data.get("tagline", ""),
+        "category":       data.get("category", ""),
+        "city":           data.get("city", ""),
+        "address":        data.get("address", ""),
+        "phone":          phone,
+        "rating":         data.get("rating", ""),
+        "reviews_count":  data.get("reviews_count", ""),
+        "hero_image":     _proxy_url(data.get("hero_image", "")),
+        "gallery_images": all_gallery,
+        "services":       data.get("services", []),
+        "reviews":        reviews,
+        "google_maps_url": data.get("google_maps_url", ""),
+        "map_embed":      data.get("map_embed", ""),
+        "wa_url":         wa_url,
+        "highlights":     _extract_highlights(reviews),
+        # Branding
+        "color_primary":  colors.get("primary", "#0D1520"),
+        "color_accent":   colors.get("accent",  "#C9A96E"),
+        "color_bg":       colors.get("bg",      "#F8F7F4"),
+        "color_surface":  colors.get("surface", "#EDE8DE"),
+        "about_text":     data.get("about_text", ""),
+        "feature_stat":   data.get("feature_stat", "Locally Loved"),
+        "feature_pills":  data.get("feature_pills", []),
+        "cta_label":      data.get("cta_label", "Get in Touch"),
+        "promo":          data.get("promo", ""),
+        # Menu module
+        "menu_enabled":   menu_enabled,
+        "menu":           menu_data or {},
+    })
 
 
 # ── API: serve BusinessData JSON ──────────────────────────────────────────────

@@ -9,7 +9,164 @@ Only synthesises text where no real data exists (tagline, services).
 Never fabricates reviews or photos.
 """
 
-from src.preview import get_tagline, get_services
+import os
+import json as _json
+from src.preview import get_tagline, get_services, DEFAULT_SERVICES
+from src.ai_content import generate_ai_content
+from src.config import (
+    DEFAULT_TAGLINE, CACHE_DIR,
+    INDUSTRY_COLORS, DEFAULT_COLORS,
+    INDUSTRY_ABOUT_HEADLINES, DEFAULT_ABOUT_HEADLINE,
+    INDUSTRY_FEATURE_STAT, DEFAULT_FEATURE_STAT,
+    INDUSTRY_FEATURE_PILLS, DEFAULT_FEATURE_PILLS,
+    INDUSTRY_CTA_LABEL, DEFAULT_CTA_LABEL,
+)
+
+# ── Reliable category fallback images (images.unsplash.com CDN — permanent) ──
+_FALLBACK_IMAGES: dict[str, list[str]] = {
+    "coffee":     [
+        "https://images.unsplash.com/photo-1495474472359-35827269479f?w=1200&h=800&fit=crop",
+        "https://images.unsplash.com/photo-1509042239860-f550ce710b93?w=800&h=600&fit=crop",
+        "https://images.unsplash.com/photo-1521017432531-fbd92d768814?w=800&h=600&fit=crop",
+        "https://images.unsplash.com/photo-1442512595331-e89e73853f31?w=800&h=600&fit=crop",
+    ],
+    "cafe":       [
+        "https://images.unsplash.com/photo-1554118811-1e0d58224f24?w=1200&h=800&fit=crop",
+        "https://images.unsplash.com/photo-1445116572660-236099ec97a0?w=800&h=600&fit=crop",
+        "https://images.unsplash.com/photo-1453614512568-c4024d13c247?w=800&h=600&fit=crop",
+        "https://images.unsplash.com/photo-1507914372368-b2b085b925a1?w=800&h=600&fit=crop",
+    ],
+    "restaurant": [
+        "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=1200&h=800&fit=crop",
+        "https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=800&h=600&fit=crop",
+        "https://images.unsplash.com/photo-1424847651672-bf20a4b0982b?w=800&h=600&fit=crop",
+        "https://images.unsplash.com/photo-1466978913421-dad2ebd01d17?w=800&h=600&fit=crop",
+    ],
+    "salon":      [
+        "https://images.unsplash.com/photo-1560869713-7d0a29430803?w=1200&h=800&fit=crop",
+        "https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?w=800&h=600&fit=crop",
+        "https://images.unsplash.com/photo-1595476108010-b4d1f102b1b1?w=800&h=600&fit=crop",
+        "https://images.unsplash.com/photo-1521590832167-7bcbfaa6381f?w=800&h=600&fit=crop",
+    ],
+    "barber":     [
+        "https://images.unsplash.com/photo-1503951914875-452162b0f3f1?w=1200&h=800&fit=crop",
+        "https://images.unsplash.com/photo-1599351431202-1e0f0137899a?w=800&h=600&fit=crop",
+        "https://images.unsplash.com/photo-1621605815971-fbc98d665033?w=800&h=600&fit=crop",
+        "https://images.unsplash.com/photo-1585747860715-2ba37e788b70?w=800&h=600&fit=crop",
+    ],
+    "gym":        [
+        "https://images.unsplash.com/photo-1534438327167-af6e4e82fc16?w=1200&h=800&fit=crop",
+        "https://images.unsplash.com/photo-1517836357463-d25dfeac3438?w=800&h=600&fit=crop",
+        "https://images.unsplash.com/photo-1571902943202-507ec2618e8f?w=800&h=600&fit=crop",
+        "https://images.unsplash.com/photo-1490645935967-10de6ba17061?w=800&h=600&fit=crop",
+    ],
+    "bakery":     [
+        "https://images.unsplash.com/photo-1509440159596-0249088772ff?w=1200&h=800&fit=crop",
+        "https://images.unsplash.com/photo-1550617931-e17a7b70dce2?w=800&h=600&fit=crop",
+        "https://images.unsplash.com/photo-1568254183919-78a4f43a2877?w=800&h=600&fit=crop",
+        "https://images.unsplash.com/photo-1486427944299-d1955d23e34d?w=800&h=600&fit=crop",
+    ],
+    "spa":        [
+        "https://images.unsplash.com/photo-1540555700478-4be290d57689?w=1200&h=800&fit=crop",
+        "https://images.unsplash.com/photo-1544161515-4ab6ce6db874?w=800&h=600&fit=crop",
+        "https://images.unsplash.com/photo-1600334089648-b0d9d3028eb2?w=800&h=600&fit=crop",
+        "https://images.unsplash.com/photo-1596178065887-1198b6148b2b?w=800&h=600&fit=crop",
+    ],
+}
+
+_FALLBACK_DEFAULT = [
+    "https://images.unsplash.com/photo-1497366216548-37526070297c?w=1200&h=800&fit=crop",
+    "https://images.unsplash.com/photo-1497366811353-6870744d04b2?w=800&h=600&fit=crop",
+    "https://images.unsplash.com/photo-1504384308090-c894fdcc538d?w=800&h=600&fit=crop",
+    "https://images.unsplash.com/photo-1497215728101-856f4ea42174?w=800&h=600&fit=crop",
+]
+
+
+def _get_fallback_images(industry: str) -> list[str]:
+    """Return a curated list of reliable fallback images for the given industry."""
+    key = industry.lower()
+    for k, imgs in _FALLBACK_IMAGES.items():
+        if k in key:
+            return imgs
+    return _FALLBACK_DEFAULT
+
+
+def _lookup_cache(name: str) -> dict | None:
+    """Search Apify cache files for a business by name to get photos + reviews."""
+    if not os.path.isdir(CACHE_DIR):
+        return None
+    try:
+        for fname in os.listdir(CACHE_DIR):
+            if not fname.endswith(".json"):
+                continue
+            with open(os.path.join(CACHE_DIR, fname), encoding="utf-8") as f:
+                items = _json.load(f)
+            if not isinstance(items, list):
+                continue
+            for item in items:
+                if (item.get("name") or "").lower().strip() == name.lower().strip():
+                    return item
+    except Exception:
+        pass
+    return None
+
+
+def _lookup_industry(lookup_dict: dict, key_str: str, default):
+    """Find the first matching value in a keyword-keyed dict."""
+    k = key_str.lower()
+    for keyword, value in lookup_dict.items():
+        if keyword in k:
+            return value
+    return default
+
+
+def _resolve(lookup_dict: dict, default, category: str, industry: str):
+    """Try category keyword first, then industry, then default."""
+    result = _lookup_industry(lookup_dict, category, None) if category else None
+    if result is None:
+        result = _lookup_industry(lookup_dict, industry, default)
+    return result
+
+
+def _build_about_text(name: str, city: str, category: str, industry: str,
+                       rating: float, reviews_count: int) -> str:
+    """Generate a 2-sentence about blurb from real business data."""
+    loc   = city if city else "the local community"
+    score = f"{float(rating):.1f}" if rating else ""
+    rev   = f"{int(reviews_count):,}" if reviews_count else ""
+    cat   = (category or industry).lower()
+
+    # Sentence 1 — what the business is
+    if "restaurant" in cat or "dining" in cat:
+        s1 = f"{name} is a beloved dining destination in {loc}, serving up memorable meals crafted from fresh, quality ingredients."
+    elif "coffee" in cat or "cafe" in cat or "café" in cat:
+        s1 = f"{name} is {loc}'s favourite spot for exceptional coffee, homemade food, and a warm welcome every visit."
+    elif "salon" in cat or "hair" in cat:
+        s1 = f"{name} is {loc}'s go-to destination for expert hair styling, colour, and personalised beauty treatments."
+    elif "barber" in cat:
+        s1 = f"{name} is the trusted barbershop in {loc}, known for precision cuts and a laid-back, welcoming vibe."
+    elif "gym" in cat or "fitness" in cat:
+        s1 = f"{name} is {loc}'s premier fitness destination, empowering members of all levels to reach their goals."
+    elif "spa" in cat or "massage" in cat:
+        s1 = f"{name} is {loc}'s sanctuary for relaxation and wellness, offering a range of restorative treatments."
+    elif "bakery" in cat:
+        s1 = f"{name} has been bringing fresh-baked goodness to {loc}, crafting every loaf, cake, and pastry with care."
+    elif "bed" in cat or "guest" in cat or "lodge" in cat or "hotel" in cat:
+        s1 = f"{name} offers warm, comfortable accommodation in the heart of {loc}, perfect for both leisure and business travellers."
+    else:
+        s1 = f"{name} has been proudly serving {loc} with quality, care, and a personal touch that keeps customers coming back."
+
+    # Sentence 2 — social proof if we have it
+    if score and rev:
+        s2 = f"With a {score}-star rating across {rev} Google reviews, our reputation speaks for itself."
+    elif score:
+        s2 = f"Our {score}-star Google rating reflects our commitment to quality and service."
+    elif rev:
+        s2 = f"Trusted by hundreds of happy customers, with {rev} Google reviews and counting."
+    else:
+        s2 = "We take pride in every interaction and look forward to welcoming you."
+
+    return f"{s1} {s2}"
 
 
 def build_business_data(lead: dict, industry: str) -> dict:
@@ -31,34 +188,38 @@ def build_business_data(lead: dict, industry: str) -> dict:
     lng           = lead.get("lng", "")
     category      = lead.get("category", "")
 
-    # ── IMAGES ──────────────────────────────────────────────────────────────
-    # Priority 1: real Google Maps photos from Apify
-    # Priority 2: Unsplash fallback (only if no real photos)
-    photos = lead.get("photos", []) or []
+    # ── ENRICH FROM CACHE if lead is missing photos/reviews ─────────────────
+    # Leads loaded from CSV don't carry photos/reviews — look them up from
+    # the raw Apify cache so demos always use real data when available.
+    cached = None
+    if not lead.get("photos") or not lead.get("reviews"):
+        cached = _lookup_cache(name)
 
-    kw = industry.lower().replace(" ", ",")
+    # ── IMAGES ──────────────────────────────────────────────────────────────
+    # Priority 1: real Google Maps photos from lead or cache
+    # Priority 2: curated category images (permanent Unsplash CDN URLs)
+    photos = lead.get("photos") or (cached.get("photos") if cached else None) or []
+
+    fallbacks = _get_fallback_images(industry)
     if photos:
         hero_image     = photos[0]
-        gallery_images = list(photos[1:7])      # up to 6 real gallery images
-        # Guarantee minimum 3 gallery tiles — pad with Unsplash if needed
-        while len(gallery_images) < 3:
-            i = len(gallery_images) + 1
-            gallery_images.append(
-                f"https://source.unsplash.com/800x600/?{kw}&sig={i}"
-            )
+        gallery_images = list(photos[1:7])
+        # Pad with fallbacks if fewer than 3 gallery tiles
+        for fb in fallbacks:
+            if len(gallery_images) >= 4:
+                break
+            if fb not in gallery_images:
+                gallery_images.append(fb)
     else:
-        hero_image     = f"https://source.unsplash.com/1600x900/?{kw}"
-        # Varied Unsplash params so gallery tiles are different images
-        gallery_images = [
-            f"https://source.unsplash.com/800x600/?{kw}&sig={i}"
-            for i in range(1, 5)
-        ]
+        hero_image     = fallbacks[0]
+        gallery_images = fallbacks[1:5]
 
     # ── REVIEWS ─────────────────────────────────────────────────────────────
     # Only use real review objects. No fabrication.
     # Sort by rating desc so best reviews surface first; show up to 5.
+    raw_reviews = lead.get("reviews") or (cached.get("reviews") if cached else None) or []
     reviews_raw = sorted(
-        lead.get("reviews", []) or [],
+        raw_reviews,
         key=lambda r: int(r.get("rating") or 0),
         reverse=True,
     )
@@ -90,9 +251,46 @@ def build_business_data(lead: dict, industry: str) -> dict:
     else:
         map_embed = ""
 
-    # ── SYNTHETIC ONLY WHERE NEEDED ──────────────────────────────────────────
-    tagline  = get_tagline(industry)
-    services = get_services(industry)
+    # ── STATIC FALLBACKS ─────────────────────────────────────────────────────
+    # Try the actual business category first (more specific), then fall back to
+    # the search industry string.  This prevents a café search industry from
+    # overriding a "Restaurant" category business.
+    tagline  = get_tagline(category)  if category else DEFAULT_TAGLINE
+    services = get_services(category) if category else DEFAULT_SERVICES
+    if tagline == DEFAULT_TAGLINE:        # no match found — try industry
+        tagline = get_tagline(industry)
+    if services == DEFAULT_SERVICES:      # no match found — try industry
+        services = get_services(industry)
+
+    # ── AI CONTENT (overrides static copy when API key is available) ─────────
+    # Generates punchy, review-aware copy using the Master Prompt.
+    # Falls back silently to static content on failure or missing key.
+    location_str = f"{city}, South Africa" if city else "South Africa"
+    ai = generate_ai_content(
+        name         = name,
+        category     = category or industry,
+        rating       = rating,
+        review_count = reviews_count,
+        reviews      = reviews,
+        location     = location_str,
+    )
+    if ai:
+        tagline  = ai["hero_line"]              # replaces static tagline
+        if ai["offers"]:
+            services = ai["offers"]             # replaces static services list
+        promo    = ai.get("promo", "")
+        ai_trust = ai.get("trust_benefit", "")  # overrides feature_stat if present
+    else:
+        promo    = ""
+        ai_trust = ""
+
+    # ── BRANDING FIELDS ──────────────────────────────────────────────────────
+    colors         = _resolve(INDUSTRY_COLORS,         DEFAULT_COLORS,         category, industry)
+    about_headline = _resolve(INDUSTRY_ABOUT_HEADLINES, DEFAULT_ABOUT_HEADLINE, category, industry)
+    feature_stat   = ai_trust or _resolve(INDUSTRY_FEATURE_STAT, DEFAULT_FEATURE_STAT, category, industry)
+    feature_pills  = _resolve(INDUSTRY_FEATURE_PILLS,  DEFAULT_FEATURE_PILLS,  category, industry)
+    cta_label      = _resolve(INDUSTRY_CTA_LABEL,      DEFAULT_CTA_LABEL,      category, industry)
+    about_text     = _build_about_text(name, city, category, industry, rating, reviews_count)
 
     return {
         # Core identity
@@ -115,8 +313,18 @@ def build_business_data(lead: dict, industry: str) -> dict:
         "has_real_reviews": has_real_reviews,
         # Map
         "map_embed":      map_embed,
-        # Synthesised (tagline + services only)
+        # Synthesised copy
         "tagline":        tagline,
         "services":       services,
         "industry":       industry,
+        # Branding (colours + content)
+        "colors":         colors,
+        "about_headline": about_headline,
+        "about_text":     about_text,
+        "feature_stat":   feature_stat,
+        "feature_pills":  feature_pills,
+        "cta_label":      cta_label,
+        # AI copy
+        "promo":          promo,           # optional promo banner (empty = hidden)
+        "ai_generated":   bool(ai),        # flag: True when AI copy was used
     }

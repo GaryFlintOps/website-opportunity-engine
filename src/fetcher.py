@@ -103,6 +103,31 @@ def filter_by_location(results: list[dict], location: str) -> list[dict]:
     return results
 
 
+# ── Safe numeric helpers ──────────────────────────────────────────────────────
+
+def _safe_float(val, default: float = 0.0) -> float:
+    """Parse a rating that may arrive as 4.8, '4.8', or '5/5'."""
+    if val is None:
+        return default
+    if isinstance(val, (int, float)):
+        return float(val)
+    s = str(val).strip()
+    if "/" in s:
+        parts = s.split("/")
+        try:
+            return float(parts[0])
+        except ValueError:
+            return default
+    try:
+        return float(s)
+    except ValueError:
+        return default
+
+
+def _safe_int(val, default: int = 0) -> int:
+    return int(_safe_float(val, default))
+
+
 # ── Apify field normalizer ────────────────────────────────────────────────────
 
 def _normalize(item: dict) -> dict:
@@ -121,7 +146,7 @@ def _normalize(item: dict) -> dict:
                 (r.get("name") or r.get("reviewerName") or "").strip()
                 or "Verified Customer"
             ),
-            "rating": int(r.get("stars") or r.get("rating") or 5),
+            "rating": _safe_int(r.get("stars") or r.get("rating"), default=5),
         })
 
     # Photos
@@ -148,8 +173,8 @@ def _normalize(item: dict) -> dict:
 
     # Scalar fields — do NOT discard leads for missing optional fields
     name     = (item.get("title") or "Unknown").strip()
-    rating   = float(item.get("totalScore") or item.get("stars") or 0)
-    rev_cnt  = int(item.get("reviewsCount") or item.get("reviews_count") or 0)
+    rating   = _safe_float(item.get("totalScore") or item.get("stars"))
+    rev_cnt  = _safe_int(item.get("reviewsCount") or item.get("reviews_count"))
     address  = (item.get("address") or "").strip()
     city     = (item.get("city") or "").strip()
     phone    = (item.get("phone") or item.get("phoneUnformatted") or "").strip()

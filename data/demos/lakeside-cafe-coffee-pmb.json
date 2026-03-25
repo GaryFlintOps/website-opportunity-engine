@@ -1,0 +1,59 @@
+{
+  "slug": "lakeside-cafe-coffee-pmb",
+  "state": "generated",
+  "generated_at": "2026-03-24T12:46:36.683917",
+  "approved_at": "",
+  "business_data": {
+    "name": "Lakeside Cafe - Coffee PMB",
+    "city": "Pietermaritzburg",
+    "address": "Seattle Coffee Company, 9 Armitage Rd, Town Hill, Pietermaritzburg, 3201, South Africa",
+    "phone": "+27 33 345 0125",
+    "website": "",
+    "rating": 4.5,
+    "reviews_count": 1138,
+    "category": "Coffee store",
+    "google_maps_url": "https://www.google.com/maps/search/?api=1&query=Lakeside%20Cafe%20-%20Coffee%20PMB&query_place_id=ChIJK6RyZp289h4RLVLTw53oUCY",
+    "place_id": "ChIJK6RyZp289h4RLVLTw53oUCY",
+    "hero_image": "https://lh3.googleusercontent.com/p/AF1QipNhtuKNI0pRcHXY2e0VxDd5akTC-DOG_eqMMOkX=w1920-h1080-k-no",
+    "gallery_images": [
+      "https://lh3.googleusercontent.com/gps-cs-s/AHVAwepR6I5J6UE3jE_tJ9hM5Mp99joTuD1zalWp-vd9vD-Xrk5tWgj1I3RQlgl3Df0GBrFfFX9xQvbjnBpidh0kVAz8TTFX8WVxFc8IgRfA0UvtHlgK30hVYIUH4dUFbzPVI899HNvp9A=w1920-h1080-k-no",
+      "https://lh3.googleusercontent.com/gps-cs-s/AHVAweqm-oGpHzbpUvLLPIAcGAWyXmIVI2AvQOCC6dCEy4zq-5-P37FQW_xF-mhm6AcMPfIpGBmoS4fl9yToFsPLQb8x56RIVOuvECgW9kLwGsW_M2Vgk0_FT0t7EaEjgizBSBBDZPw=w1920-h1080-k-no",
+      "https://lh3.googleusercontent.com/gps-cs-s/AHVAweqIEXFFILXUT_jOU9WDZszizKTeFod12481uQH6pAb3Az0oqtPoF2hU49-UDtlx0pQ0DyQsgzjllFQw9TZRPnXzx8z0qqCGqaWV-u-goNmtAhG9QneBeEm_JPd_Ph4g0WJId-HZy5Xl4BUQ=w1920-h1080-k-no",
+      "https://lh3.googleusercontent.com/gps-cs-s/AHVAwerHOdRTSpoRINeTwAvOFPRbHCVGMCFi975AF_5c171C1bMDb-f2r_s33N533KZSXvQry-oIVRP0n-vr6b3FhaUwo5z2hMIUqRWY-IHArMRxGJpU-85euvgTJTJQPnVTWxRvd3ED=w1920-h1080-k-no",
+      "https://lh3.googleusercontent.com/gps-cs-s/AHVAwep6bZLa_8AdeCf0qYdhB8yyd497F_V4TIFfbDKeeVCBxy09OuWHCxTGdQkBDT-u2VMUPdW6mm-ouZgLEMuSICx3vhP_itQ5W7Sx2FmrPzar5GcaPFP1xzGJz2CnUSpjn9i5fW2f=w1920-h1080-k-no"
+    ],
+    "has_real_photos": true,
+    "reviews": [
+      {
+        "text": "The food was delicious and the service was good.",
+        "author": "Themba Ntamane",
+        "rating": 5
+      },
+      {
+        "text": "Visited the place with family .Lovely atmosphere  with kids enjoying feeding the ducks at the pond .Spectacular seating overlooking the pond with ducks going about there daily lives. Restaurant  was busy and staff and management under pressure. Service was spot on and meals arrived fresh and piping hot and absolutely w",
+        "author": "Viren Maharaj",
+        "rating": 4
+      },
+      {
+        "text": "Almost no vegan options\nA man who I assume was the manager was too handsy\nI asked if they had an iced latte, they said no but they have some other thing, they brought the other thing and it was an iced latte with sugar\nOat milk on the menu but they don't have oat milk\nAvo toast is only one slice with too much avo, just",
+        "author": "Tian Landman",
+        "rating": 2
+      },
+      {
+        "text": "While they're listed on Google Maps as \"pet friendly\" they would not even allow us to sit outside if we have a small dog with us. So, they wouldn't even allow us to sit outside on the concrete benches, outside their own premises. Sad.",
+        "author": "IBFSA Pty Ltd",
+        "rating": 1
+      }
+    ],
+    "has_real_reviews": true,
+    "map_embed": "https://maps.google.com/maps?q=-29.58493,30.3752157&z=15&output=embed",
+    "tagline": "Your daily coffee, done right.",
+    "services": [
+      "Espresso & Pour Over",
+      "Cold Brew & Iced Drinks",
+      "Pastries & Light Bites",
+      "Private Events"
+    ],
+    "industry": "coffee shops"
+  }
+}

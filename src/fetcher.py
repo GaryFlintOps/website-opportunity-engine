@@ -1,6 +1,7 @@
 import os
 import json
 import re
+import unicodedata
 import requests
 from src.config import APIFY_API_TOKEN, APIFY_ACTOR_ID, CACHE_DIR
 
@@ -15,7 +16,9 @@ SYNC_TIMEOUT = 300   # seconds
 # ── Cache helpers ─────────────────────────────────────────────────────────────
 
 def _query_slug(query: str) -> str:
-    slug = query.lower().strip()
+    # Transliterate accented chars to ASCII before slugifying
+    slug = unicodedata.normalize("NFKD", query.lower().strip())
+    slug = slug.encode("ascii", "ignore").decode("ascii")
     slug = re.sub(r"[^\w\s-]", "", slug)
     slug = re.sub(r"[\s_-]+", "-", slug)
     return slug.strip("-")
@@ -51,6 +54,67 @@ def _save_cache(query: str, leads: list[dict]) -> None:
 
 # ── Main fetcher ──────────────────────────────────────────────────────────────
 
+def filter_by_location(results: list[dict], location: str) -> list[dict]:
+    """
+    Hard filter: keep only results whose address or city contains the primary
+    location name, with postcode-range disambiguation when a province qualifier
+    is provided (e.g. 'Hilton, KwaZulu-Natal' vs. Hilton suburb in Bloemfontein).
+
+    SA postcode ranges (approximate):
+      KwaZulu-Natal  : 3000–4999
+      Western Cape   : 7000–8299
+      Eastern Cape   : 5000–6999
+      Gauteng        : 0001–1999 / 2000
+      Free State / Northern Cape : 8300–9999
+    """
+    parts = [p.strip().lower() for p in location.split(",")]
+    primary   = parts[0]
+    qualifier = parts[1] if len(parts) > 1 else ""
+
+    # Map qualifier keywords → valid postcode ranges
+    PROVINCE_POSTCODES = {
+        "kwazulu-natal":  (3000, 4999),
+        "kwazulu natal":  (3000, 4999),
+        "kzn":            (3000, 4999),
+        "western cape":   (7000, 8299),
+        "eastern cape":   (5000, 6999),
+        "gauteng":        (1, 1999),
+        "free state":     (9000, 9999),
+        "northern cape":  (8300, 8999),
+        "limpopo":        (700, 999),
+        "mpumalanga":     (1200, 1399),
+        "north west":     (2500, 2999),
+    }
+
+    postcode_range = None
+    for kw, rng in PROVINCE_POSTCODES.items():
+        if kw in qualifier:
+            postcode_range = rng
+            break
+
+    filtered = []
+    for r in results:
+        address = (r.get("address") or "").lower()
+        city    = (r.get("city")    or "").lower()
+
+        # Must contain the primary location token
+        if primary not in address and primary not in city:
+            continue
+
+        # If we have a province qualifier, validate by postcode range
+        if postcode_range:
+            codes = re.findall(r"\b(\d{4})\b", address)
+            if codes:
+                code = int(codes[0])
+                lo, hi = postcode_range
+                if not (lo <= code <= hi):
+                    continue   # postcode is in a different province — skip
+
+        filtered.append(r)
+
+    return filtered
+
+
 def fetch_leads(industry: str, location: str) -> list[dict]:
     """
     Fetch leads from Apify Google Maps scraper using the synchronous endpoint.
@@ -61,16 +125,20 @@ def fetch_leads(industry: str, location: str) -> list[dict]:
     """
     # APIFY_API_TOKEN is validated at import time in config.py
 
-    # Anchor to South Africa to prevent ambiguous global results
-    search_query = f"{industry} near {location}, South Africa"
+    # Build a precise localised search string
+    search_query = f"{industry} in {location}"
     region_code  = _guess_region_code(location)
     print(f"[Fetcher] Final query: {search_query}")
 
     # ── Cache check ────────────────────────────────────────────────────────
     cached = _load_cache(search_query)
     if cached is not None:
-        print(f"[Fetcher] Returning {len(cached)} cached leads for '{search_query}'")
-        return cached
+        print(f"[Fetcher] Cache hit — applying location filter before returning")
+        filtered = filter_by_location(cached, location)
+        print(f"[Fetcher] RAW RESULTS (cached): {len(cached)}")
+        print(f"[Fetcher] FILTERED RESULTS    : {len(filtered)}")
+        print(f"[Fetcher] First 3 addresses   : {[r.get('address','') for r in filtered[:3]]}")
+        return filtered
 
     # ── Live Apify call ────────────────────────────────────────────────────
     # Apify REST API requires "~" as the owner/name separator (not "/")
@@ -79,7 +147,8 @@ def fetch_leads(industry: str, location: str) -> list[dict]:
     params = {"token": APIFY_API_TOKEN}
 
     payload = {
-        "searchStringsArray":        [search_query],
+        "searchStringsArray":        [f"{industry} in {location}"],
+        "locationQuery":             location,
         "maxCrawledPlacesPerSearch": MAX_PLACES,
         "maxReviews":                MAX_REVIEWS,
         "maxImages":                 MAX_IMAGES,
@@ -91,6 +160,7 @@ def fetch_leads(industry: str, location: str) -> list[dict]:
     print(f"[Fetcher] API Actor ID: {actor_api_id}")
     print(f"[Fetcher] Endpoint    : POST {url}")
     print(f"[Fetcher] Query       : '{search_query}'")
+    print(f"[Fetcher] locationQuery: '{location}'")
     print(f"[Fetcher] Waiting for Apify to complete (up to {SYNC_TIMEOUT}s)...")
 
     resp = requests.post(url, json=payload, params=params, timeout=SYNC_TIMEOUT)
@@ -116,12 +186,16 @@ def fetch_leads(industry: str, location: str) -> list[dict]:
         if item.get("title")
     ]
 
-    print(f"[Fetcher] Retrieved {len(leads)} leads")
+    # ── Hard location filter (BEFORE scoring / returning) ──────────────────
+    filtered = filter_by_location(leads, location)
+    print(f"[Fetcher] RAW RESULTS     : {len(leads)}")
+    print(f"[Fetcher] FILTERED RESULTS: {len(filtered)}")
+    print(f"[Fetcher] First 3 addresses: {[r.get('address','') for r in filtered[:3]]}")
 
-    # ── Save to cache ──────────────────────────────────────────────────────
+    # ── Save to cache (raw leads — filter is re-applied on cache hit too) ──
     _save_cache(search_query, leads)
 
-    return leads
+    return filtered
 
 
 # ── Normalizer ────────────────────────────────────────────────────────────────

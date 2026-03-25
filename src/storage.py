@@ -2,6 +2,7 @@ import os
 import csv
 import json
 import re
+import unicodedata
 from datetime import datetime
 from src.config import OUTPUT_DIR, DEMOS_DIR
 
@@ -11,7 +12,14 @@ DEMO_STATES = ("not_generated", "generated", "approved", "sent")
 # ── Utilities ─────────────────────────────────────────────────────────────────
 
 def slugify(name: str) -> str:
-    slug = name.lower()
+    """
+    Convert a business name to a URL-safe ASCII slug.
+    Accented characters are transliterated (é→e, ô→o, etc.) so slugs are
+    consistent across platforms and safe to use in file names and URLs.
+    """
+    # Decompose unicode → transliterate to closest ASCII equivalent
+    slug = unicodedata.normalize("NFKD", name.lower())
+    slug = slug.encode("ascii", "ignore").decode("ascii")
     slug = re.sub(r"[^\w\s-]", "", slug)
     slug = re.sub(r"[\s_-]+", "-", slug)
     return slug.strip("-")

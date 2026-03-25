@@ -13,7 +13,7 @@ from src.storage import (
 )
 from src.transformer import build_business_data
 from src.cards import prepare_leads_for_display, filter_leads
-from src.config import SITE_URL
+from src.config import SITE_URL, DEMOS_DIR
 
 BASE_DIR      = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TEMPLATES_DIR = os.path.join(BASE_DIR, "templates")
@@ -120,7 +120,12 @@ async def api_get_demo(slug: str):
     Returns the BusinessData JSON for a demo.
     Called by Next.js SSR at build/request time to render demo pages.
     """
-    print(f"[API] Serving demo for slug: {slug}")
+    print(f"[API] LOOKING FOR SLUG: {slug}")
+    try:
+        demo_files = os.listdir(DEMOS_DIR)
+        print(f"[API] FILES: {demo_files}")
+    except Exception as e:
+        print(f"[API] Could not list demos dir: {e}")
     data = load_demo_data(slug)
     if data is None:
         print(f"[API] Demo not found: {slug}")

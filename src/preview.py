@@ -1,8 +1,8 @@
 """
 preview.py
 
-Data helpers only. HTML generation has been removed.
-Demo rendering is now handled by the Next.js app (web/).
+Data helpers only.
+Demo HTML rendering is handled directly by the /demo/{slug} route in dashboard.py.
 
 Exports:
   get_tagline(industry)  → str

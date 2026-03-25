@@ -2,18 +2,18 @@ import os
 from fastapi import FastAPI, Request, Form, BackgroundTasks
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
-from fastapi.middleware.cors import CORSMiddleware
+# CORSMiddleware intentionally not imported — all clients are same-origin
 
 from src.pipeline import run_pipeline
 from src.storage import (
-    load_latest_leads, get_lead_by_slug,
+    load_latest_leads, load_latest_filter_stats, get_lead_by_slug,
     save_demo, load_demo_data, load_demo_meta,
     get_demo_state, set_demo_state, demo_exists,
     get_all_demo_states,
 )
 from src.transformer import build_business_data
 from src.cards import prepare_leads_for_display, filter_leads
-from src.config import SITE_URL, DEMOS_DIR
+from src.config import SITE_URL, DEMOS_DIR, OUTPUT_DIR, CACHE_DIR
 
 BASE_DIR      = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TEMPLATES_DIR = os.path.join(BASE_DIR, "templates")
@@ -22,13 +22,22 @@ app       = FastAPI(title="Website Opportunity Engine")
 templates = Jinja2Templates(directory=TEMPLATES_DIR)
 
 # ── CORS ──────────────────────────────────────────────────────────────────────
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# All browser requests are same-origin (served from this Render instance).
+# No cross-origin clients remain — CORSMiddleware is intentionally omitted.
+
+# ── Startup: log resolved filesystem paths for Render log verification ────────
+@app.on_event("startup")
+async def startup_log():
+    print("[Startup] Website Opportunity Engine is starting")
+    print(f"[Startup] OUTPUT_DIR : {os.path.abspath(OUTPUT_DIR)}")
+    print(f"[Startup] DEMOS_DIR  : {os.path.abspath(DEMOS_DIR)}")
+    print(f"[Startup] CACHE_DIR  : {os.path.abspath(CACHE_DIR)}")
+    print(f"[Startup] SITE_URL   : {SITE_URL}")
+    on_render = bool(os.getenv("RENDER"))
+    print(f"[Startup] Running on Render: {on_render}")
+    if on_render:
+        print("[Startup] ⚠  Render free tier — filesystem is EPHEMERAL. "
+              "Demos are lost on redeploy unless a Render Disk is attached.")
 
 _last_search: dict = {"industry": "", "location": "", "running": False, "error": ""}
 
@@ -48,19 +57,41 @@ async def index(
     for lead in filtered:
         lead["demo_state"] = get_demo_state(lead.get("slug", ""))
 
+    # Warn if running on Render without a persistent disk
+    # (RENDER env var is injected automatically by Render's build system)
+    ephemeral_warning = bool(os.getenv("RENDER") and not os.getenv("PERSISTENT_DEMOS_DIR"))
+
+    # Filter quality metrics — carried from the last pipeline run
+    filter_stats   = load_latest_filter_stats()
+    raw_count      = filter_stats.get("raw", 0)
+    filtered_total = filter_stats.get("filtered", 0)
+    filter_pct     = round(filtered_total / raw_count * 100) if raw_count else None
+    low_confidence = bool(
+        filter_stats                                      # stats exist (search has run)
+        and (
+            filtered_total < 5                            # fewer than 5 results
+            or (raw_count > 0 and filtered_total / raw_count < 0.30)  # <30% passed filter
+        )
+    )
+
     return templates.TemplateResponse("index.html", {
-        "request":        request,
-        "leads":          filtered,
-        "total":          len(leads),
-        "filtered_count": len(filtered),
-        "industry":       industry,
-        "location":       location,
-        "min_score":      min_score,
-        "no_website":     no_website,
-        "max_reviews":    max_reviews,
-        "running":        _last_search["running"],
-        "error":          _last_search["error"],
-        "site_url":       SITE_URL,
+        "request":           request,
+        "leads":             filtered,
+        "total":             len(leads),
+        "filtered_count":    len(filtered),
+        "industry":          industry,
+        "location":          location,
+        "min_score":         min_score,
+        "no_website":        no_website,
+        "max_reviews":       max_reviews,
+        "running":           _last_search["running"],
+        "error":             _last_search["error"],
+        "site_url":          SITE_URL,
+        "ephemeral_warning": ephemeral_warning,
+        "raw_count":         raw_count,
+        "filtered_total":    filtered_total,
+        "filter_pct":        filter_pct,
+        "low_confidence":    low_confidence,
     })
 
 
@@ -112,13 +143,157 @@ async def lead_detail(request: Request, slug: str):
     })
 
 
-# ── API: serve BusinessData JSON (consumed by Next.js) ───────────────────────
+# ── Demo: render HTML page directly from Render ───────────────────────────────
+
+@app.get("/demo/{slug}", response_class=HTMLResponse)
+async def render_demo(slug: str):
+    """
+    Renders the demo page as a self-contained HTML response.
+    Served directly from Render — no external frontend required.
+    """
+    data = load_demo_data(slug)
+    if data is None:
+        return HTMLResponse(
+            f"<html><body style='font-family:Arial;padding:40px;background:#0f1117;color:#e4e6f0'>"
+            f"<h1>Demo not found</h1>"
+            f"<p>No demo has been generated for <code>{slug}</code> yet.</p>"
+            f"<p><a href='/' style='color:#6c63ff'>← Back to dashboard</a></p>"
+            f"</body></html>",
+            status_code=404,
+        )
+
+    name        = data.get("name", "Business")
+    tagline     = data.get("tagline", "")
+    address     = data.get("address", "")
+    phone       = data.get("phone", "")
+    website     = data.get("website", "")
+    rating      = data.get("rating", "")
+    rev_count   = data.get("reviews_count", "")
+    category    = data.get("category", "")
+    hero_image  = data.get("hero_image", "")
+    services    = data.get("services", [])
+    reviews     = data.get("reviews", [])
+    maps_url    = data.get("google_maps_url", "")
+    map_embed   = data.get("map_embed", "")
+
+    services_html = "".join(
+        f'<li style="padding:0.5rem 0;border-bottom:1px solid #2d3148">{s}</li>'
+        for s in services
+    )
+    reviews_html = "".join(
+        f'<div style="background:#22263a;border:1px solid #2d3148;border-radius:8px;padding:1rem;margin-bottom:0.75rem">'
+        f'<div style="color:#f0b429;margin-bottom:0.35rem">{"★" * int(r.get("rating",5))}</div>'
+        f'<p style="color:#e4e6f0;font-size:0.9rem;line-height:1.6">{r.get("text","")}</p>'
+        f'<p style="color:#8b8fa8;font-size:0.75rem;margin-top:0.5rem">— {r.get("author","")}</p>'
+        f'</div>'
+        for r in reviews[:4]
+    )
+    hero_section = (
+        f'<img src="{hero_image}" alt="{name}" '
+        f'style="width:100%;max-height:380px;object-fit:cover;border-radius:10px;margin-bottom:2rem" />'
+        if hero_image else ""
+    )
+    map_section = (
+        f'<div style="margin-top:2rem">'
+        f'<iframe src="{map_embed}" width="100%" height="300" style="border:0;border-radius:8px" '
+        f'allowfullscreen loading="lazy"></iframe></div>'
+        if map_embed else ""
+    )
+    website_link = (
+        f'<a href="{website}" target="_blank" rel="noopener" '
+        f'style="color:#6c63ff">{website}</a>'
+        if website else '<span style="color:#8b8fa8">No website yet</span>'
+    )
+    maps_link = (
+        f' &nbsp;·&nbsp; <a href="{maps_url}" target="_blank" rel="noopener" '
+        f'style="color:#6c63ff">View on Google Maps</a>'
+        if maps_url else ""
+    )
+
+    html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{name}</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after {{ box-sizing: border-box; margin: 0; padding: 0; }}
+    body {{
+      background: #0f1117; color: #e4e6f0;
+      font-family: 'Inter', sans-serif; min-height: 100vh;
+    }}
+    .notice {{
+      background: #1a1a2e; color: rgba(255,255,255,.72);
+      padding: 0.65rem 1.5rem; font-size: 0.78rem;
+      letter-spacing: 0.03em; text-align: center;
+      border-bottom: 1px solid rgba(201,169,110,.2);
+    }}
+    .notice strong {{ color: #c9a96e; }}
+    .container {{ max-width: 860px; margin: 0 auto; padding: 2.5rem 1.5rem 4rem; }}
+    h1 {{ font-size: clamp(1.9rem,4vw,2.8rem); font-weight: 800; letter-spacing: -0.02em; margin-bottom: 0.4rem; }}
+    .tagline {{ color: #8b8fa8; font-size: 1.05rem; margin-bottom: 1.75rem; }}
+    .meta {{ display:flex; flex-wrap:wrap; gap:0.6rem; margin-bottom: 2rem; }}
+    .chip {{
+      background: #22263a; border: 1px solid #2d3148;
+      border-radius: 5px; padding: 0.25rem 0.75rem;
+      font-size: 0.78rem; color: #8b8fa8;
+    }}
+    .chip.rating {{ color: #f0b429; }}
+    h2 {{ font-size: 1rem; font-weight: 700; color: #8b8fa8;
+          letter-spacing: 0.08em; text-transform: uppercase;
+          margin: 2rem 0 1rem; }}
+    ul {{ list-style: none; padding: 0; color: #e4e6f0; }}
+    .footer {{
+      margin-top: 3rem; padding-top: 1.5rem;
+      border-top: 1px solid #2d3148;
+      font-size: 0.78rem; color: #8b8fa8; text-align: center;
+    }}
+    @media (max-width: 600px) {{ .container {{ padding: 1.5rem 1rem 3rem; }} }}
+  </style>
+</head>
+<body>
+  <div class="notice">
+    ✦ <strong>This is a preview of how your business could look online</strong>
+    &nbsp;—&nbsp; powered by Website Opportunity Engine
+  </div>
+  <div class="container">
+    {hero_section}
+    <h1>{name}</h1>
+    <p class="tagline">{tagline}</p>
+    <div class="meta">
+      {f'<span class="chip">{category}</span>' if category else ''}
+      {f'<span class="chip rating">★ {rating} ({rev_count} reviews)</span>' if rating else ''}
+      {f'<span class="chip">📍 {address}</span>' if address else ''}
+      {f'<span class="chip">📞 {phone}</span>' if phone else ''}
+    </div>
+    {'<h2>Our Services</h2><ul>' + services_html + '</ul>' if services else ''}
+    {'<h2>What Customers Say</h2>' + reviews_html if reviews else ''}
+    <h2>Find Us</h2>
+    <p style="color:#e4e6f0;font-size:0.9rem">
+      {address}{maps_link}
+    </p>
+    <p style="margin-top:0.75rem;font-size:0.9rem">
+      🌐 {website_link}
+    </p>
+    {map_section}
+    <div class="footer">
+      Want a real website like this? Contact us today.
+      &nbsp;·&nbsp; <a href="/" style="color:#6c63ff">← Dashboard</a>
+    </div>
+  </div>
+</body>
+</html>"""
+
+    return HTMLResponse(html)
+
+
+# ── API: serve BusinessData JSON ──────────────────────────────────────────────
 
 @app.get("/api/demo/{slug}")
 async def api_get_demo(slug: str):
     """
-    Returns the BusinessData JSON for a demo.
-    Called by Next.js SSR at build/request time to render demo pages.
+    Returns the BusinessData JSON for a demo slug.
     """
     print(f"[API] LOOKING FOR SLUG: {slug}")
     try:
@@ -143,7 +318,7 @@ async def api_get_demo(slug: str):
 async def generate_demo(slug: str, force: bool = False):
     """
     Build BusinessData and persist to data/demos/{slug}.json.
-    No HTML is generated — Next.js handles rendering.
+    The HTML page is served directly by the /demo/{slug} route on this server.
     Skips if already generated unless force=true.
     """
     if demo_exists(slug) and not force:
@@ -211,6 +386,15 @@ async def approve_demo(slug: str):
 
 
 # ── Health / debug ────────────────────────────────────────────────────────────
+
+@app.get("/debug/demos")
+async def debug_demos():
+    """List all demo JSON files currently stored on this server's filesystem."""
+    try:
+        return {"files": sorted(os.listdir(DEMOS_DIR))}
+    except Exception as e:
+        return {"error": str(e)}
+
 
 @app.get("/ping")
 async def ping():

@@ -43,16 +43,24 @@ def save_leads(leads: list[dict], industry: str, location: str) -> str:
     return filepath
 
 
-def save_leads_json(leads: list[dict], industry: str, location: str) -> str:
+def save_leads_json(
+    leads: list[dict],
+    industry: str,
+    location: str,
+    filter_stats: dict | None = None,
+) -> str:
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     filepath = os.path.join(OUTPUT_DIR, "latest.json")
+    payload: dict = {
+        "industry":     industry,
+        "location":     location,
+        "timestamp":    datetime.now().isoformat(),
+        "leads":        leads,
+    }
+    if filter_stats:
+        payload["filter_stats"] = filter_stats
     with open(filepath, "w", encoding="utf-8") as f:
-        json.dump({
-            "industry":  industry,
-            "location":  location,
-            "timestamp": datetime.now().isoformat(),
-            "leads":     leads,
-        }, f, ensure_ascii=False, indent=2)
+        json.dump(payload, f, ensure_ascii=False, indent=2)
     return filepath
 
 
@@ -63,6 +71,16 @@ def load_latest_leads() -> tuple[list[dict], str, str]:
     with open(filepath, "r", encoding="utf-8") as f:
         data = json.load(f)
     return data.get("leads", []), data.get("industry", ""), data.get("location", "")
+
+
+def load_latest_filter_stats() -> dict:
+    """Return the raw-vs-filtered stats from the most recent pipeline run, or {}."""
+    filepath = os.path.join(OUTPUT_DIR, "latest.json")
+    if not os.path.exists(filepath):
+        return {}
+    with open(filepath, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    return data.get("filter_stats", {})
 
 
 def get_lead_by_slug(slug: str) -> tuple[dict | None, str, str]:
@@ -83,7 +101,7 @@ def _demo_path(slug: str) -> str:
 def save_demo(slug: str, business_data: dict) -> str:
     """
     Persist BusinessData + state to data/demos/{slug}.json.
-    No HTML stored — rendering is handled by Next.js.
+    HTML rendering is handled by the /demo/{slug} route on this server.
     Preserves existing state + approved_at on rebuild.
     """
     path     = _demo_path(slug)
@@ -96,6 +114,7 @@ def save_demo(slug: str, business_data: dict) -> str:
         "approved_at":   existing.get("approved_at", ""),
         "business_data": business_data,
     }
+    print(f"[STORAGE] Saving demo to: {path}")
     with open(path, "w", encoding="utf-8") as f:
         json.dump(payload, f, ensure_ascii=False, indent=2)
     return path

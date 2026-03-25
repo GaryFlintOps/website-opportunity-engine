@@ -12,6 +12,9 @@ MAX_IMAGES  = 6    # images kept per place
 
 SYNC_TIMEOUT = 300   # seconds
 
+# Populated after every fetch so pipeline.py can persist the stats
+_last_fetch_stats: dict = {}
+
 
 # ── Cache helpers ─────────────────────────────────────────────────────────────
 
@@ -123,6 +126,8 @@ def fetch_leads(industry: str, location: str) -> list[dict]:
     Returns a list of normalised lead dicts capped at MAX_PLACES.
     Raises immediately on any HTTP error or empty result set.
     """
+    global _last_fetch_stats   # populated at end of both code paths
+
     # APIFY_API_TOKEN is validated at import time in config.py
 
     # Build a precise localised search string
@@ -138,6 +143,7 @@ def fetch_leads(industry: str, location: str) -> list[dict]:
         print(f"[Fetcher] RAW RESULTS (cached): {len(cached)}")
         print(f"[Fetcher] FILTERED RESULTS    : {len(filtered)}")
         print(f"[Fetcher] First 3 addresses   : {[r.get('address','') for r in filtered[:3]]}")
+        _last_fetch_stats = {"raw": len(cached), "filtered": len(filtered), "source": "cache"}
         return filtered
 
     # ── Live Apify call ────────────────────────────────────────────────────
@@ -191,6 +197,8 @@ def fetch_leads(industry: str, location: str) -> list[dict]:
     print(f"[Fetcher] RAW RESULTS     : {len(leads)}")
     print(f"[Fetcher] FILTERED RESULTS: {len(filtered)}")
     print(f"[Fetcher] First 3 addresses: {[r.get('address','') for r in filtered[:3]]}")
+
+    _last_fetch_stats = {"raw": len(leads), "filtered": len(filtered), "source": "live"}
 
     # ── Save to cache (raw leads — filter is re-applied on cache hit too) ──
     _save_cache(search_query, leads)

@@ -18,8 +18,8 @@ REVIEWS_DIR = os.path.join(DATA_DIR, "reviews")
 DEMOS_DIR = os.path.join(DATA_DIR, "demos")
 CACHE_DIR = os.path.join(DATA_DIR, "cache")
 
-# Public URL where Next.js demos are served (Vercel deployment)
-SITE_URL = os.getenv("SITE_URL", "https://website-engine-alpha.vercel.app")
+# Public URL where demos are served — Render is the single deployment target
+SITE_URL = os.getenv("SITE_URL", "https://website-opportunity-engine.onrender.com")
 
 TAGLINES = {
     "coffee": "Your daily coffee, done right.",

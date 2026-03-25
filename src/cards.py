@@ -15,11 +15,15 @@ def prepare_leads_for_display(leads: list[dict]) -> list[dict]:
         lead["has_website"] = bool(lead.get("website"))
         lead["has_phone"] = bool(lead.get("phone"))
 
+        # Thresholds tuned for 0-100 scale.
+        # Hot  (>= 80): no website + no WhatsApp + at least one more gap
+        # Warm (>= 50): strong single gap or two moderate ones
+        # Cool (< 50):  minor gaps only — lower priority
         score = lead.get("score", 0)
-        if score >= 8:
+        if score >= 80:
             lead["score_class"] = "score-high"
             lead["score_label"] = "Hot"
-        elif score >= 5:
+        elif score >= 50:
             lead["score_class"] = "score-mid"
             lead["score_label"] = "Warm"
         else:

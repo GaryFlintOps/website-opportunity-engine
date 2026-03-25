@@ -185,6 +185,65 @@
         .state-approved      { background: rgba(56,217,169,0.14); color: var(--green); }
         .state-sent          { background: rgba(240,180,41,0.12); color: var(--gold); }
 
+        /* OUTREACH STATUS BADGE (dashboard table) */
+        .os-badge {
+            display: inline-block; padding: 0.18rem 0.55rem;
+            border-radius: 999px; font-size: 0.66rem; font-weight: 700;
+            letter-spacing: 0.04em; text-transform: uppercase; white-space: nowrap;
+        }
+        .os-new            { background: rgba(139,143,168,0.1);  color: var(--muted); }
+        .os-contacted      { background: rgba(108,99,255,0.14);  color: var(--accent); }
+        .os-replied        { background: rgba(56,217,169,0.14);  color: var(--green); }
+        .os-no_response    { background: rgba(255,107,107,0.1);  color: var(--red); }
+        .os-demo_sent      { background: rgba(56,217,169,0.14);  color: var(--green); }
+        .os-negotiating    { background: rgba(240,180,41,0.12);  color: var(--gold); }
+        .os-closed         { background: rgba(56,217,169,0.2);   color: var(--green); font-weight:800; }
+        .os-not_interested { background: rgba(139,143,168,0.08); color: var(--muted); text-decoration:line-through; }
+
+        /* INLINE ACTION BUTTONS */
+        .btn-send {
+            background: rgba(56,217,169,0.12); color: var(--green);
+            border: 1px solid rgba(56,217,169,0.25);
+            padding: 0.28rem 0.65rem; border-radius: 5px;
+            font-size: 0.72rem; font-weight: 700; cursor: pointer;
+            font-family: inherit; white-space: nowrap; transition: opacity 0.15s;
+        }
+        .btn-send:hover { opacity: 0.8; }
+        .btn-followup {
+            background: rgba(255,159,67,0.1); color: var(--orange);
+            border: 1px solid rgba(255,159,67,0.3);
+            padding: 0.28rem 0.65rem; border-radius: 5px;
+            font-size: 0.72rem; font-weight: 700; cursor: pointer;
+            font-family: inherit; white-space: nowrap; transition: opacity 0.15s;
+        }
+        .btn-followup:hover { opacity: 0.8; }
+
+        /* FOLLOW-UP NUDGE */
+        .followup-nudge {
+            display: block; font-size: 0.63rem; font-weight: 600;
+            color: var(--orange); margin-top: 0.2rem; white-space: nowrap;
+        }
+
+        /* WA CONFIDENCE DOT */
+        .wc-dot {
+            display: inline-flex; align-items: center; justify-content: center;
+            width: 20px; height: 20px; border-radius: 50%;
+            font-size: 0.65rem; font-weight: 700;
+        }
+        .wc-0 { background: rgba(255,107,107,0.12); color: var(--red); }
+        .wc-1 { background: rgba(240,180,41,0.12);  color: var(--gold); }
+        .wc-2 { background: rgba(56,217,169,0.12);  color: var(--green); }
+
+        /* QUICK FILTER CHIP */
+        .quick-filter-link {
+            display: inline-block; padding: 0.35rem 0.8rem;
+            background: rgba(108,99,255,0.1); border: 1px solid rgba(108,99,255,0.3);
+            border-radius: 999px; font-size: 0.74rem; font-weight: 600;
+            color: var(--accent); text-decoration: none; margin-top: 0.75rem;
+            transition: background 0.15s;
+        }
+        .quick-filter-link:hover { background: rgba(108,99,255,0.2); }
+
         /* RATING */
         .stars      { color: var(--gold); font-size: 0.78rem; }
         .rating-val { font-size: 0.78rem; color: var(--muted); }
@@ -311,18 +370,29 @@
             <div class="filter-group">
                 <label>Min score</label>
                 <select name="min_score" onchange="this.form.submit()">
-                    <option value="0"  {% if min_score == 0 %}selected{% endif %}>All scores</option>
-                    <option value="5"  {% if min_score == 5 %}selected{% endif %}>5+ Warm</option>
-                    <option value="7"  {% if min_score == 7 %}selected{% endif %}>7+ Hot</option>
-                    <option value="9"  {% if min_score == 9 %}selected{% endif %}>9–10 🔥</option>
+                    <option value="0"  {% if min_score == 0  %}selected{% endif %}>All scores</option>
+                    <option value="50" {% if min_score == 50 %}selected{% endif %}>50+ Warm</option>
+                    <option value="80" {% if min_score == 80 %}selected{% endif %}>80+ High Intent 🔥</option>
+                    <option value="90" {% if min_score == 90 %}selected{% endif %}>90+ Priority 🔥🔥</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label>Outreach status</label>
+                <select name="filter_status" onchange="this.form.submit()">
+                    <option value=""            {% if filter_status == '' %}selected{% endif %}>All</option>
+                    {% for s in outreach_statuses %}
+                    <option value="{{ s }}" {% if filter_status == s %}selected{% endif %}>
+                        {{ status_labels[s] }}
+                    </option>
+                    {% endfor %}
                 </select>
             </div>
             <div class="filter-group">
                 <label>Max reviews</label>
                 <select name="max_reviews" onchange="this.form.submit()">
-                    <option value="0"   {% if max_reviews == 0 %}selected{% endif %}>Any</option>
-                    <option value="20"  {% if max_reviews == 20 %}selected{% endif %}>Under 20</option>
-                    <option value="50"  {% if max_reviews == 50 %}selected{% endif %}>Under 50</option>
+                    <option value="0"   {% if max_reviews == 0   %}selected{% endif %}>Any</option>
+                    <option value="20"  {% if max_reviews == 20  %}selected{% endif %}>Under 20</option>
+                    <option value="50"  {% if max_reviews == 50  %}selected{% endif %}>Under 50</option>
                     <option value="100" {% if max_reviews == 100 %}selected{% endif %}>Under 100</option>
                 </select>
             </div>
@@ -332,6 +402,21 @@
                     onchange="this.form.submit()" />
                 <label for="no_website">No website only</label>
             </div>
+            <div class="checkbox-row">
+                <input type="checkbox" id="has_phone" name="has_phone" value="true"
+                    {% if has_phone %}checked{% endif %}
+                    onchange="this.form.submit()" />
+                <label for="has_phone">Has phone only</label>
+            </div>
+            <div class="checkbox-row">
+                <input type="checkbox" id="wc_zero" name="wc_zero" value="true"
+                    {% if wc_zero %}checked{% endif %}
+                    onchange="this.form.submit()" />
+                <label for="wc_zero">No WhatsApp (wc=0)</label>
+            </div>
+            <!-- Quick filter: daily outreach list -->
+            <a href="/?min_score=80&has_phone=true&wc_zero=true&filter_status=new"
+               class="quick-filter-link">🎯 Daily outreach list</a>
         </form>
         {% endif %}
     </aside>
@@ -390,9 +475,19 @@
                 <div class="stat-label">No Website</div>
             </div>
             <div class="stat">
-                <div class="stat-val">{{ leads | selectattr('score', 'ge', 7) | list | length }}</div>
-                <div class="stat-label">Hot (7+)</div>
+                <div class="stat-val">{{ leads | selectattr('score', 'ge', 80) | list | length }}</div>
+                <div class="stat-label">High Intent (80+)</div>
             </div>
+            <div class="stat" style="border-color: rgba(56,217,169,0.3);">
+                <div class="stat-val" style="color: var(--green);">{{ sent_today }}</div>
+                <div class="stat-label">Sent Today 📤</div>
+            </div>
+            {% if followups_due > 0 %}
+            <div class="stat" style="border-color: rgba(255,159,67,0.35);">
+                <div class="stat-val" style="color: var(--orange);">{{ followups_due }}</div>
+                <div class="stat-label">Follow-up Due 🔔</div>
+            </div>
+            {% endif %}
             <div class="stat">
                 <div class="stat-val">{{ leads | selectattr('demo_state', 'ne', 'not_generated') | list | length }}</div>
                 <div class="stat-label">Demos Built</div>
@@ -448,6 +543,8 @@
                         <th>Rating</th>
                         <th>Reviews</th>
                         <th>Website</th>
+                        <th>WA</th>
+                        <th>Status</th>
                         <th>Demo</th>
                         <th></th>
                     </tr>
@@ -482,6 +579,19 @@
                             {% endif %}
                         </td>
                         <td>
+                            {% set wc = lead.whatsapp_confidence | default(0) | int %}
+                            <span class="wc-dot wc-{{ [wc, 2] | min }}"
+                                  title="WhatsApp confidence: {{ wc }}">{{ wc }}</span>
+                        </td>
+                        <td>
+                            <span class="os-badge os-{{ lead.outreach_status }}">
+                                {{ status_labels[lead.outreach_status] }}
+                            </span>
+                            {% if lead.followup_nudge %}
+                            <span class="followup-nudge">🔔 {{ lead.followup_nudge }}</span>
+                            {% endif %}
+                        </td>
+                        <td>
                             <span class="state-badge state-{{ lead.demo_state }}"
                                   id="state-{{ lead.slug }}">
                                 {% if lead.demo_state == 'not_generated' %}Not built
@@ -494,6 +604,21 @@
                         <td>
                             <div class="row-actions" id="actions-{{ lead.slug }}">
                                 <a href="/lead/{{ lead.slug }}" class="btn-view">View →</a>
+
+                                {% if lead.whatsapp_send_url %}
+                                <button class="btn-send"
+                                        onclick="trackSend('{{ lead.slug }}', '{{ lead.whatsapp_send_url }}')">
+                                    💬 Send
+                                </button>
+                                {% endif %}
+
+                                {% if lead.followup and lead.whatsapp_followup_url %}
+                                <button class="btn-followup"
+                                        onclick="trackSend('{{ lead.slug }}', '{{ lead.whatsapp_followup_url }}')">
+                                    🔔 Follow up
+                                </button>
+                                {% endif %}
+
                                 {% if lead.demo_state == 'not_generated' %}
                                 <button class="btn btn-sm btn-generate"
                                     onclick="generateOne('{{ lead.slug }}', this)">
@@ -502,7 +627,7 @@
                                 {% else %}
                                 <a href="{{ site_url }}/demo/{{ lead.slug }}" target="_blank"
                                    class="btn btn-sm btn-accent">
-                                    🔗 View Demo
+                                    🔗 Demo
                                 </a>
                                 {% if lead.demo_state == 'generated' %}
                                 <button class="btn btn-sm btn-approve"
@@ -512,7 +637,7 @@
                                 {% endif %}
                                 <button class="btn-copy"
                                     onclick="copyLink('{{ site_url }}/demo/{{ lead.slug }}', this)">
-                                    📋 Copy Link
+                                    📋
                                 </button>
                                 {% endif %}
                             </div>
@@ -552,6 +677,25 @@ document.getElementById('searchForm')?.addEventListener('submit', () => {
     btn.disabled = true;
     btn.textContent = '⏳ Starting…';
 });
+
+// ── WhatsApp send + auto-track ────────────────────────────────────────────────
+async function trackSend(slug, waUrl) {
+    if (!waUrl) { showToast('⚠ No phone number for this lead'); return; }
+    window.open(waUrl, '_blank');
+    try {
+        const r = await fetch(`/track-send/${slug}`, { method: 'POST' });
+        const d = await r.json();
+        if (d.ok) {
+            showToast('✅ Marked as Contacted');
+            // Refresh the status badge in the row without full reload
+            const badge = document.querySelector(`tr[data-slug="${slug}"] .os-badge`);
+            if (badge) {
+                badge.className = 'os-badge os-contacted';
+                badge.textContent = 'Contacted';
+            }
+        }
+    } catch (_) { /* non-blocking */ }
+}
 
 // ── Toast notification ────────────────────────────────────────────────────────
 function showToast(msg, duration = 3000) {

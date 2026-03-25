@@ -14,6 +14,34 @@ from src.storage import (
 from src.transformer import build_business_data
 from src.cards import prepare_leads_for_display, filter_leads
 from src.config import SITE_URL, DEMOS_DIR, OUTPUT_DIR, CACHE_DIR
+from src.outreach import generate_message, generate_followup
+from datetime import datetime as _dt
+from src.tracking import (
+    get_status, update_status, get_all_entries,
+    followup_needed, OUTREACH_STATUSES, STATUS_LABELS,
+)
+import re
+from urllib.parse import quote as _url_quote
+
+def build_whatsapp_url(phone: str, message: str) -> str:
+    """
+    Build a wa.me link with a pre-filled message.
+    Handles SA landline/mobile formatting:
+      031 555 0000  →  27315550000
+      +27 82 123 4567 →  27821234567
+    Returns '' if phone is blank.
+    """
+    digits = re.sub(r"\D", "", phone or "")
+    if not digits:
+        return ""
+    # SA local format: leading 0 + 9 more digits → replace leading 0 with 27
+    if digits.startswith("0") and len(digits) == 10:
+        digits = "27" + digits[1:]
+    # Already has country code without +
+    elif not digits.startswith("27"):
+        digits = "27" + digits  # best-effort fallback
+    return f"https://wa.me/{digits}?text={_url_quote(message)}"
+
 
 BASE_DIR      = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TEMPLATES_DIR = os.path.join(BASE_DIR, "templates")
@@ -46,31 +74,90 @@ _last_search: dict = {"industry": "", "location": "", "running": False, "error":
 
 @app.get("/", response_class=HTMLResponse)
 async def index(
-    request: Request,
-    min_score: int   = 0,
-    no_website: bool = False,
-    max_reviews: int = 0,
+    request:       Request,
+    min_score:     int  = 0,
+    no_website:    bool = False,
+    max_reviews:   int  = 0,
+    filter_status: str  = "",    # "", "new", "contacted", "demo_sent", …
+    has_phone:     bool = False,
+    wc_zero:       bool = False,  # WhatsApp confidence == 0 only
 ):
     leads, industry, location = load_latest_leads()
-    leads    = prepare_leads_for_display(leads)
+    leads = prepare_leads_for_display(leads)
+
+    # ── Merge tracking + outreach data into every lead ────────────────────
+    tracking = get_all_entries()
+    today    = _dt.utcnow().date().isoformat()
+
+    for lead in leads:
+        slug  = lead.get("slug", "")
+        entry = tracking.get(slug, {})
+        phone = lead.get("phone", "")
+
+        lead["outreach_status"] = entry.get("status", "new")
+        lead["followup_nudge"]  = followup_needed(entry) if entry else None
+        lead["followup"]        = lead["followup_nudge"]   # alias used in template
+
+        # WhatsApp confidence fallback for leads fetched before the field existed
+        if "whatsapp_confidence" not in lead:
+            lead["whatsapp_confidence"] = 1 if lead.get("has_whatsapp") else 0
+
+        # Per-lead send URLs (populated only if a phone number exists)
+        if phone:
+            lead["whatsapp_send_url"]   = build_whatsapp_url(phone, generate_message(lead))
+            lead["whatsapp_followup_url"] = build_whatsapp_url(phone, generate_followup(lead))
+            lead["followup_message"]    = generate_followup(lead)
+        else:
+            lead["whatsapp_send_url"]     = ""
+            lead["whatsapp_followup_url"] = ""
+            lead["followup_message"]      = ""
+
+    # ── Priority sort (before filtering so rank order is preserved) ───────
+    # Bucket order: new → has phone → no WA (wc=0) → high score
+    leads.sort(key=lambda l: (
+        l.get("outreach_status") != "new",    # new leads first
+        not l.get("phone"),                   # has phone first
+        l.get("whatsapp_confidence", 2) > 0,  # no-WA leads first
+        -l.get("score", 0),                   # highest score first
+    ))
+
+    # ── Apply filters ─────────────────────────────────────────────────────
     filtered = filter_leads(leads, min_score=min_score, no_website_only=no_website, max_reviews=max_reviews)
+
+    if filter_status and filter_status in OUTREACH_STATUSES:
+        filtered = [l for l in filtered if l.get("outreach_status") == filter_status]
+
+    if has_phone:
+        filtered = [l for l in filtered if l.get("phone")]
+
+    if wc_zero:
+        filtered = [l for l in filtered if l.get("whatsapp_confidence", 1) == 0]
+
     for lead in filtered:
         lead["demo_state"] = get_demo_state(lead.get("slug", ""))
 
-    # Warn if running on Render without a persistent disk
-    # (RENDER env var is injected automatically by Render's build system)
+    # ── Daily stats (computed over ALL leads, not just filtered view) ─────
+    sent_today     = sum(
+        1 for e in tracking.values()
+        if e.get("status") == "contacted"
+        and e.get("updated_at", "").startswith(today)
+    )
+    followups_due  = sum(1 for e in tracking.values() if followup_needed(e))
+    followup_count = sum(1 for l in leads if l.get("followup_nudge"))
+
+    # ── Ephemeral storage warning ─────────────────────────────────────────
     ephemeral_warning = bool(os.getenv("RENDER") and not os.getenv("PERSISTENT_DEMOS_DIR"))
 
-    # Filter quality metrics — carried from the last pipeline run
+    # ── Filter quality metrics ────────────────────────────────────────────
     filter_stats   = load_latest_filter_stats()
     raw_count      = filter_stats.get("raw", 0)
     filtered_total = filter_stats.get("filtered", 0)
     filter_pct     = round(filtered_total / raw_count * 100) if raw_count else None
     low_confidence = bool(
-        filter_stats                                      # stats exist (search has run)
+        filter_stats
         and (
-            filtered_total < 5                            # fewer than 5 results
-            or (raw_count > 0 and filtered_total / raw_count < 0.30)  # <30% passed filter
+            filtered_total < 5
+            or (raw_count > 0 and filtered_total / raw_count < 0.30)
         )
     )
 
@@ -84,6 +171,9 @@ async def index(
         "min_score":         min_score,
         "no_website":        no_website,
         "max_reviews":       max_reviews,
+        "filter_status":     filter_status,
+        "has_phone":         has_phone,
+        "wc_zero":           wc_zero,
         "running":           _last_search["running"],
         "error":             _last_search["error"],
         "site_url":          SITE_URL,
@@ -92,6 +182,11 @@ async def index(
         "filtered_total":    filtered_total,
         "filter_pct":        filter_pct,
         "low_confidence":    low_confidence,
+        "followup_count":    followup_count,
+        "sent_today":        sent_today,
+        "followups_due":     followups_due,
+        "outreach_statuses": list(OUTREACH_STATUSES),
+        "status_labels":     STATUS_LABELS,
     })
 
 
@@ -132,15 +227,48 @@ async def lead_detail(request: Request, slug: str):
     if not lead:
         return HTMLResponse("<h1>Lead not found</h1>", status_code=404)
 
+    outreach_status  = get_status(slug)
+    outreach_msg     = generate_message(lead)
+    whatsapp_send_url = build_whatsapp_url(lead.get("phone", ""), outreach_msg)
     return templates.TemplateResponse("lead.html", {
-        "request":    request,
-        "lead":       lead,
-        "industry":   industry,
-        "location":   location,
-        "demo_state": get_demo_state(slug),
-        "demo_meta":  load_demo_meta(slug),
-        "site_url":   SITE_URL,
+        "request":           request,
+        "lead":              lead,
+        "industry":          industry,
+        "location":          location,
+        "demo_state":        get_demo_state(slug),
+        "demo_meta":         load_demo_meta(slug),
+        "site_url":          SITE_URL,
+        "outreach_message":  outreach_msg,
+        "whatsapp_send_url": whatsapp_send_url,
+        "outreach_status":   outreach_status,
+        "outreach_statuses": list(OUTREACH_STATUSES),
+        "status_labels":     STATUS_LABELS,
     })
+
+
+# ── Outreach tracking ─────────────────────────────────────────────────────────
+
+@app.post("/track/{slug}")
+async def track_lead(slug: str, status: str = Form(...)):
+    """Update the outreach status for a lead and redirect back to lead detail."""
+    try:
+        update_status(slug, status)
+    except ValueError as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
+    return RedirectResponse(url=f"/lead/{slug}", status_code=303)
+
+
+@app.post("/track-send/{slug}")
+async def track_send(slug: str):
+    """
+    Mark lead as 'contacted' via WhatsApp (called by JS before opening wa.me).
+    Returns JSON so the JS can proceed without a full page reload.
+    """
+    try:
+        update_status(slug, "contacted", channel="whatsapp")
+    except ValueError as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
+    return JSONResponse({"ok": True})
 
 
 # ── Demo: render HTML page directly from Render ───────────────────────────────

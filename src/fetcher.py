@@ -263,23 +263,37 @@ def _normalize(item: dict) -> dict:
     maps_url = (item.get("url") or "").strip()
     place_id = (item.get("placeId") or "").strip()
 
+    # ── WhatsApp detection (confidence-graded) ────────────────────────────
+    # Each signal contributes 1 to confidence; any signal → has_whatsapp.
+    #   wa_link:    wa.me deep-link found in website field (strongest proof)
+    #   wa_keyword: "whatsapp" in business name or category text
+    #   wa_phone:   SA mobile (+27) — WhatsApp-capable by default; extend later
+    wa_link    = "wa.me" in website.lower()
+    wa_keyword = "whatsapp" in (name.lower() + category.lower())
+    wa_phone   = phone.startswith("+27") if phone else False
+
+    whatsapp_confidence = int(wa_link) + int(wa_keyword) + int(wa_phone)
+    has_whatsapp        = whatsapp_confidence >= 1
+
     return {
-        "name":            name,
-        "city":            city,
-        "address":         address,
-        "phone":           phone,
-        "website":         website,
-        "rating":          rating,
-        "reviews_count":   rev_cnt,
-        "category":        category,
-        "google_maps_url": maps_url,
-        "maps_url":        maps_url,
-        "place_id":        place_id,
-        "lat":             lat,
-        "lng":             lng,
-        "photos":          photos,
-        "reviews":         reviews,
-        "reviews_text":    [r["text"] for r in reviews],
+        "name":                name,
+        "city":                city,
+        "address":             address,
+        "phone":               phone,
+        "website":             website,
+        "rating":              rating,
+        "reviews_count":       rev_cnt,
+        "category":            category,
+        "google_maps_url":     maps_url,
+        "maps_url":            maps_url,
+        "place_id":            place_id,
+        "lat":                 lat,
+        "lng":                 lng,
+        "photos":              photos,
+        "reviews":             reviews,
+        "reviews_text":        [r["text"] for r in reviews],
+        "has_whatsapp":        has_whatsapp,
+        "whatsapp_confidence": whatsapp_confidence,
     }
 
 

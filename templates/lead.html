@@ -156,6 +156,35 @@
         .review-author { font-style: normal; font-size: 0.72rem; font-weight: 700;
             color: var(--accent); margin-top: 0.4rem; display: block; }
 
+        /* OUTREACH MESSAGE */
+        .outreach-textarea {
+            width: 100%; min-height: 180px; resize: vertical;
+            background: var(--surface2); border: 1px solid var(--border);
+            border-radius: 8px; color: var(--text); font-family: inherit;
+            font-size: 0.855rem; line-height: 1.7; padding: 0.85rem 1rem;
+            outline: none; cursor: text;
+        }
+        .outreach-textarea:focus { border-color: var(--accent); }
+
+        /* OUTREACH STATUS */
+        .status-form { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
+        .status-select {
+            background: var(--surface2); border: 1px solid var(--border);
+            border-radius: 7px; color: var(--text); font-family: inherit;
+            font-size: 0.855rem; padding: 0.55rem 0.85rem; outline: none; cursor: pointer;
+        }
+        .status-select:focus { border-color: var(--accent); }
+        .status-badge {
+            display: inline-block; padding: 0.28rem 0.75rem;
+            border-radius: 999px; font-size: 0.72rem; font-weight: 700;
+            letter-spacing: 0.05em; text-transform: uppercase;
+        }
+        .status-new         { background: rgba(139,143,168,0.1);  color: var(--muted); }
+        .status-contacted   { background: rgba(108,99,255,0.14);  color: var(--accent); }
+        .status-demo_sent   { background: rgba(56,217,169,0.14);  color: var(--green); }
+        .status-negotiating { background: rgba(240,180,41,0.12);  color: var(--gold); }
+        .status-closed      { background: rgba(255,107,107,0.1);  color: var(--red); }
+
         /* TOAST */
         #toast {
             position: fixed; bottom: 2rem; left: 50%;
@@ -325,6 +354,20 @@
                 </div>
                 {% endif %}
 
+                {% if not lead.has_whatsapp %}
+                <div class="signal signal-bad">
+                    <span class="signal-icon">💬</span>
+                    <span class="signal-text">No WhatsApp presence</span>
+                    <span class="signal-pts">+2 pts</span>
+                </div>
+                {% else %}
+                <div class="signal signal-ok">
+                    <span class="signal-icon">💬</span>
+                    <span class="signal-text">Has WhatsApp</span>
+                    <span class="signal-pts">+0</span>
+                </div>
+                {% endif %}
+
             </div>
         </div>
 
@@ -399,6 +442,43 @@
         </div>
     </div>
     {% endif %}
+
+    <!-- OUTREACH STATUS -->
+    <div class="card" style="margin-bottom: 1.25rem;">
+        <h3>Outreach Status</h3>
+        <div class="status-form">
+            <span class="status-badge status-{{ outreach_status }}">
+                {{ status_labels[outreach_status] }}
+            </span>
+            <form method="POST" action="/track/{{ lead.slug }}" style="display:contents">
+                <select name="status" class="status-select" onchange="this.form.submit()">
+                    {% for s in outreach_statuses %}
+                    <option value="{{ s }}" {% if s == outreach_status %}selected{% endif %}>
+                        {{ status_labels[s] }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </form>
+        </div>
+    </div>
+
+    <!-- OUTREACH MESSAGE -->
+    <div class="card">
+        <h3 style="display:flex; justify-content:space-between; align-items:center;">
+            <span>Outreach Message</span>
+            <div style="display:flex; gap:0.5rem;">
+                {% if whatsapp_send_url %}
+                <button class="btn btn-demo" style="font-size:0.75rem; padding:0.35rem 0.75rem;"
+                        onclick="trackSend('{{ lead.slug }}', '{{ whatsapp_send_url }}')">
+                    💬 Send via WhatsApp
+                </button>
+                {% endif %}
+                <button class="btn btn-copy" style="font-size:0.75rem; padding:0.35rem 0.75rem;"
+                        onclick="copyOutreach()">📋 Copy</button>
+            </div>
+        </h3>
+        <textarea id="outreachMsg" class="outreach-textarea" readonly>{{ outreach_message }}</textarea>
+    </div>
 
 </div>
 
@@ -481,6 +561,34 @@ function copyLink(slug) {
     }).catch(() => {
         prompt('Copy this link:', url);
     });
+}
+
+function copyOutreach() {
+    const ta = document.getElementById('outreachMsg');
+    navigator.clipboard.writeText(ta.value).then(() => {
+        showToast('📋 Message copied to clipboard');
+    }).catch(() => {
+        ta.select();
+        document.execCommand('copy');
+        showToast('📋 Message copied');
+    });
+}
+
+async function trackSend(slug, waUrl) {
+    // Fire-and-forget: mark as contacted, then open WhatsApp.
+    // Opens WhatsApp immediately — tracking failure never blocks the send.
+    window.open(waUrl, '_blank');
+    try {
+        const r = await fetch(`/track-send/${slug}`, { method: 'POST' });
+        const d = await r.json();
+        if (d.ok) {
+            showToast('✅ Status updated to Contacted');
+            // Refresh status badge after short delay
+            setTimeout(() => location.reload(), 1800);
+        }
+    } catch (_) {
+        // Non-blocking — WhatsApp already opened above
+    }
 }
 </script>
 </body>

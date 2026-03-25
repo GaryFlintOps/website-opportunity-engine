@@ -287,13 +287,6 @@
             color: var(--red); font-size: 0.83rem;
         }
 
-        .ephemeral-banner {
-            background: rgba(240,180,41,0.07); border: 1px solid rgba(240,180,41,0.3);
-            border-radius: 8px; padding: 0.75rem 1.25rem; margin-bottom: 1.5rem;
-            display: flex; align-items: center; gap: 0.75rem;
-            color: var(--gold); font-size: 0.81rem;
-        }
-        .ephemeral-banner strong { font-weight: 700; }
 
         .lowconf-banner {
             background: rgba(255,107,107,0.07); border: 1px solid rgba(255,107,107,0.3);
@@ -424,18 +417,6 @@
     <!-- MAIN -->
     <main class="main">
 
-        {% if ephemeral_warning %}
-        <div class="ephemeral-banner">
-            <span>⚠</span>
-            <div>
-                <strong>Ephemeral storage:</strong>
-                Demos and leads are saved to local disk on this Render instance.
-                They will be lost on the next deploy or server restart.
-                Attach a <strong>Render Disk</strong> and set
-                <code>PERSISTENT_DEMOS_DIR</code> to make storage permanent.
-            </div>
-        </div>
-        {% endif %}
 
         {% if low_confidence %}
         <div class="lowconf-banner">

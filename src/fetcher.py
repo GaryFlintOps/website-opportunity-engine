@@ -284,7 +284,7 @@ def fetch_leads(industry: str, location: str) -> list[dict]:
     search_query = f"{industry} in {location}"
     region_code  = _guess_region_code(location)
 
-    print(f"[Fetcher] Running Apify actor...")
+    print(f"[Fetcher] Running Apify actor (LIVE MODE)")
     print(f"[Fetcher] Query: '{search_query}'  |  Actor: {APIFY_ACTOR_ID}")
 
     # ── Cache check ────────────────────────────────────────────────────────

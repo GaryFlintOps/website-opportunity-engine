@@ -29,7 +29,10 @@ def run_pipeline(industry: str, location: str) -> list[dict]:
         print("[Pipeline] No leads returned.")
         return []
 
+    print(f"[Pipeline] After fetch+filter: {len(leads)} leads")
+
     leads = score_leads(leads)
+    print(f"[Pipeline] After scoring: {len(leads)} leads")
 
     for lead in leads:
         lead["slug"] = slugify(lead["name"])

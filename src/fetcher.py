@@ -70,55 +70,37 @@ def _save_cache(query: str, leads: list[dict]) -> None:
         print(f"[Fetcher] Cache write error: {e}")
 
 
-# ── Location filter ───────────────────────────────────────────────────────────
+# ── Light filter (dedupe + empty removal) ────────────────────────────────────
+
+def light_filter(results: list[dict]) -> list[dict]:
+    """
+    Minimal filtering only:
+    - Remove entries with no name
+    - Deduplicate by name (case-insensitive, keep first occurrence)
+    NO location filtering — return everything Apify gives us.
+    """
+    seen_names: set[str] = set()
+    out: list[dict] = []
+    for r in results:
+        name = (r.get("name") or "").strip()
+        if not name or name == "Unknown":
+            continue
+        key = name.lower()
+        if key in seen_names:
+            continue
+        seen_names.add(key)
+        out.append(r)
+    return out
+
+
+# ── Location filter (kept for reference, no longer called) ────────────────────
 
 def filter_by_location(results: list[dict], location: str) -> list[dict]:
     """
-    Keep only results whose address or city contains the primary location name.
-    Uses SA postcode ranges to disambiguate provinces when a qualifier is given
-    (e.g. 'Hilton, KwaZulu-Natal' vs Hilton suburb in Bloemfontein).
+    DEPRECATED — no longer called. Kept for reference only.
+    Previously filtered results to only those matching the location string.
     """
-    parts     = [p.strip().lower() for p in location.split(",")]
-    primary   = parts[0]
-    qualifier = parts[1] if len(parts) > 1 else ""
-
-    PROVINCE_POSTCODES = {
-        "kwazulu-natal": (3000, 4999), "kwazulu natal": (3000, 4999), "kzn": (3000, 4999),
-        "western cape":  (7000, 8299),
-        "eastern cape":  (5000, 6999),
-        "gauteng":       (1, 1999),
-        "free state":    (9000, 9999),
-        "northern cape": (8300, 8999),
-        "limpopo":       (700, 999),
-        "mpumalanga":    (1200, 1399),
-        "north west":    (2500, 2999),
-    }
-
-    postcode_range = None
-    for kw, rng in PROVINCE_POSTCODES.items():
-        if kw in qualifier:
-            postcode_range = rng
-            break
-
-    filtered = []
-    for r in results:
-        address = (r.get("address") or "").lower()
-        city    = (r.get("city")    or "").lower()
-
-        if primary not in address and primary not in city:
-            continue
-
-        if postcode_range:
-            codes = re.findall(r"\b(\d{4})\b", address)
-            if codes:
-                code = int(codes[0])
-                lo, hi = postcode_range
-                if not (lo <= code <= hi):
-                    continue
-
-        filtered.append(r)
-
-    return filtered
+    return results
 
 
 # ── Apify field normalizer ────────────────────────────────────────────────────
@@ -290,16 +272,14 @@ def fetch_leads(industry: str, location: str) -> list[dict]:
     # ── Cache check ────────────────────────────────────────────────────────
     cached = _load_cache(search_query)
     if cached is not None:
-        filtered = filter_by_location(cached, location)
+        filtered = light_filter(cached)
         _last_fetch_stats["raw"]      = len(cached)
         _last_fetch_stats["filtered"] = len(filtered)
-        print(f"[Fetcher] Retrieved {len(filtered)} leads from cache (raw: {len(cached)})")
-        if not filtered:
-            raise Exception(
-                f"Cache returned {len(cached)} raw results but 0 passed "
-                f"location filter for '{location}'. Clear cache or broaden the query."
-            )
-        return filtered
+        top = filtered[:MAX_PLACES]
+        print(f"[Pipeline] Raw leads: {len(cached)}")
+        print(f"[Pipeline] Returned leads: {len(top)}")
+        print(f"[Fetcher] Retrieved {len(top)} leads from cache (raw: {len(cached)})")
+        return top
 
     # ── Live Apify call ────────────────────────────────────────────────────
     actor_api_id = APIFY_ACTOR_ID.replace("/", "~")
@@ -356,24 +336,22 @@ def fetch_leads(industry: str, location: str) -> list[dict]:
 
     leads = [
         _normalize(item)
-        for item in items[:MAX_PLACES]
+        for item in items
         if item.get("title")
     ]
 
-    # Location filter
-    filtered = filter_by_location(leads, location)
+    # Light filter only: dedupe + remove empty (NO location filter)
+    filtered = light_filter(leads)
+    top      = filtered[:MAX_PLACES]
+
     _last_fetch_stats["raw"]      = len(leads)
-    _last_fetch_stats["filtered"] = len(filtered)
+    _last_fetch_stats["filtered"] = len(top)
 
-    print(f"[Fetcher] Retrieved {len(filtered)} leads from Apify (raw: {len(leads)}, after location filter: {len(filtered)})")
+    print(f"[Pipeline] Raw leads: {len(leads)}")
+    print(f"[Pipeline] Returned leads: {len(top)}")
+    print(f"[Fetcher] Retrieved {len(top)} leads from Apify (raw: {len(leads)}, after dedupe: {len(top)})")
 
-    # Cache raw leads (re-filter applied on cache hit too)
+    # Cache raw (pre-dedupe) leads
     _save_cache(search_query, leads)
 
-    if not filtered:
-        raise Exception(
-            f"Fetcher failed: Apify returned {len(leads)} results but 0 matched "
-            f"location filter for '{location}'. Try a broader location string."
-        )
-
-    return filtered
+    return top

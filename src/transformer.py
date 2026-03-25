@@ -13,6 +13,7 @@ import os
 import json as _json
 from src.preview import get_tagline, get_services, DEFAULT_SERVICES
 from src.ai_content import generate_ai_content
+from src.review_intel import extract_review_intel
 from src.config import (
     DEFAULT_TAGLINE, CACHE_DIR,
     INDUSTRY_COLORS, DEFAULT_COLORS,
@@ -237,6 +238,11 @@ def build_business_data(lead: dict, industry: str) -> dict:
     # has_real_reviews is True only when at least 2 substantive reviews exist
     has_real_reviews = len(reviews) >= 2
 
+    # ── REVIEW INTELLIGENCE ──────────────────────────────────────────────────
+    # Pure frequency-based extraction — no API, no fabrication.
+    # Extracts highlights, signature items, and experience tags from real text.
+    review_intel = extract_review_intel(reviews)
+
     # ── MAP EMBED ────────────────────────────────────────────────────────────
     # Use coords if available, otherwise fall back to address search
     if lat and lng:
@@ -381,6 +387,8 @@ def build_business_data(lead: dict, industry: str) -> dict:
         "cta_line":       cta_line,        # short action line e.g. "Message us to book instantly"
         "rating_badge":   rating_badge,    # "highly_rated" | "local" | ""
         "ai_generated":   bool(ai),        # flag: True when AI copy was used
+        # Review intelligence (frequency-based, no fabrication)
+        "review_intel":   review_intel,
         # Diagnostic / opportunity intelligence
         "has_website":        has_website,
         "website_url":        website_url,

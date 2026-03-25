@@ -39,6 +39,19 @@
       "Pastries & Light Bites",
       "Private Events"
     ],
-    "industry": "coffee shops"
+    "industry": "coffee shops",
+    "review_intel": {
+      "top_highlights": [
+        "Great food",
+        "Great service",
+        "Lovely atmosphere"
+      ],
+      "signature_items": [],
+      "experience_tags": [
+        "Hidden gem",
+        "Great atmosphere"
+      ],
+      "top_review_quote": "Most deserving of 5 stars across the board! A real hidden gem... Can't believe it's taken us so long to come here…"
+    }
   }
 }

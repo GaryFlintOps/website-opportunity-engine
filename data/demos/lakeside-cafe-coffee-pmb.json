@@ -69,6 +69,20 @@
       "Fresh Daily Baking",
       "Local Ingredients"
     ],
-    "cta_label": "View Our Menu"
+    "cta_label": "View Our Menu",
+    "review_intel": {
+      "top_highlights": [
+        "Spot on service",
+        "Delicious food",
+        "Lovely atmosphere",
+        "Fresh meals"
+      ],
+      "signature_items": [],
+      "experience_tags": [
+        "Great atmosphere",
+        "Great service"
+      ],
+      "top_review_quote": "The food was delicious and the service was good."
+    }
   }
 }

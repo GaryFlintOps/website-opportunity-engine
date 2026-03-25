@@ -69,6 +69,17 @@
       "Chef's Specials Daily",
       "Private Dining Available"
     ],
-    "cta_label": "View Our Menu"
+    "cta_label": "View Our Menu",
+    "review_intel": {
+      "top_highlights": [
+        "Excellent food",
+        "Amazing breakfast"
+      ],
+      "signature_items": [
+        "Breakfast Special"
+      ],
+      "experience_tags": [],
+      "top_review_quote": "What a super place! The menu is varied and reasonably priced. The have great specials ....all the breakfasts were half…"
+    }
   }
 }

@@ -269,19 +269,7 @@ def fetch_leads(industry: str, location: str) -> list[dict]:
     print(f"[Fetcher] Running Apify actor (LIVE MODE)")
     print(f"[Fetcher] Query: '{search_query}'  |  Actor: {APIFY_ACTOR_ID}")
 
-    # ── Cache check ────────────────────────────────────────────────────────
-    cached = _load_cache(search_query)
-    if cached is not None:
-        filtered = light_filter(cached)
-        _last_fetch_stats["raw"]      = len(cached)
-        _last_fetch_stats["filtered"] = len(filtered)
-        top = filtered[:MAX_PLACES]
-        print(f"[Pipeline] Raw leads: {len(cached)}")
-        print(f"[Pipeline] Returned leads: {len(top)}")
-        print(f"[Fetcher] Retrieved {len(top)} leads from cache (raw: {len(cached)})")
-        return top
-
-    # ── Live Apify call ────────────────────────────────────────────────────
+    # ── Live Apify call (cache skipped — always fetch fresh from Google Maps) ──
     actor_api_id = APIFY_ACTOR_ID.replace("/", "~")
     url = (
         f"https://api.apify.com/v2/acts/{actor_api_id}"

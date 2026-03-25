@@ -84,10 +84,43 @@ def load_latest_filter_stats() -> dict:
 
 
 def get_lead_by_slug(slug: str) -> tuple[dict | None, str, str]:
+    # Primary: look in the latest pipeline run
     leads, industry, location = load_latest_leads()
     for lead in leads:
         if lead.get("slug") == slug:
             return lead, industry, location
+
+    # Fallback: reconstruct lead from the demo JSON if one exists
+    raw = _load_raw(slug)
+    if raw is not None:
+        bd = raw.get("business_data") or {}
+        # Build a lead-compatible dict from business_data fields
+        lead = {
+            "name":               bd.get("name", slug),
+            "slug":               slug,
+            "city":               bd.get("city", ""),
+            "address":            bd.get("address", ""),
+            "phone":              bd.get("phone", ""),
+            "website":            bd.get("website", ""),
+            "rating":             bd.get("rating", 0),
+            "reviews_count":      bd.get("reviews_count", 0),
+            "category":           bd.get("category", ""),
+            "google_maps_url":    bd.get("google_maps_url", ""),
+            "maps_url":           bd.get("google_maps_url", ""),
+            "place_id":           bd.get("place_id", ""),
+            "lat":                bd.get("lat", ""),
+            "lng":                bd.get("lng", ""),
+            "photos":             bd.get("gallery_images", bd.get("photos", [])),
+            "reviews":            bd.get("reviews", []),
+            "reviews_text":       [r.get("text", "") for r in bd.get("reviews", [])],
+            "has_whatsapp":       bd.get("has_whatsapp", False),
+            "whatsapp_confidence": bd.get("whatsapp_confidence", 0),
+            "score":              bd.get("opportunity_score", 0),
+        }
+        ind = bd.get("category", "")
+        loc = bd.get("city", "")
+        return lead, ind, loc
+
     return None, "", ""
 
 

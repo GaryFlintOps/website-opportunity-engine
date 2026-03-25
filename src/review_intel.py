@@ -15,141 +15,178 @@ Usage:
     #   "top_review_quote": "The best flat white I've had in years...",
     # }
 
-Extraction rules:
-- Only uses reviews with rating >= 4
-- Only surfaces phrases present in review text (no invention)
-- Prioritises frequency (appears in more than 1 review)
-- Keeps phrases short (2–4 words)
-- Returns empty arrays when evidence is insufficient (prefer empty over fake)
+STRICT SEPARATION:
+  highlights    = category-level quality signals (coffee, food, service, staff, atmosphere)
+  signature_items = specific named items (flat white, eggs benedict, croissant)
+  experience_tags = experiential / vibe descriptors (hidden gem, dog friendly, cosy atmosphere)
+
+Rules:
+  - Only uses reviews with rating >= 4 for extraction
+  - Highlights and experience_tags never contain the same phrase
+  - Specific items in highlights are moved to signature_items
+  - Blacklisted generic phrases are excluded
+  - max 4 words per phrase
+  - Returns empty arrays when evidence is insufficient (prefer empty over fake)
 """
 
 import re
-from collections import defaultdict
 
 
-# ── Quality nouns with preferred adjectives (ordered best → acceptable) ───────
+# ── CATEGORY-LEVEL quality nouns for highlights ───────────────────────────────
+# STRICT: only broad categories here.
+# Specific items (flat white, burger, etc.) must go via _ITEM_PATTERNS.
 
 _QUALITY_NOUNS: list[tuple[str, list[str], str]] = [
-    # (noun_pattern, preferred_adjectives, display_label)
-    ("coffee",      ["amazing", "great", "excellent", "best", "fantastic", "perfect", "good", "incredible"], "coffee"),
-    ("flat white",  ["amazing", "great", "best", "perfect", "excellent"],                                    "flat white"),
-    ("food",        ["amazing", "great", "excellent", "delicious", "incredible", "fantastic", "good", "lovely"], "food"),
-    ("service",     ["great", "excellent", "amazing", "top-notch", "spot on", "perfect", "good", "quick"],   "service"),
+    # (noun_pattern, preferred_adjectives_ordered_best_first, display_label)
+    ("coffee",      ["amazing", "great", "excellent", "best", "fantastic", "perfect", "incredible"],  "coffee"),
+    ("food",        ["amazing", "great", "excellent", "delicious", "incredible", "fantastic", "lovely"], "food"),
+    ("service",     ["great", "excellent", "amazing", "top-notch", "spot on", "perfect", "incredible"], "service"),
     ("staff",       ["friendly", "amazing", "great", "lovely", "wonderful", "helpful", "welcoming", "inviting"], "staff"),
-    ("atmosphere",  ["great", "amazing", "beautiful", "lovely", "wonderful", "vibey", "perfect"],            "atmosphere"),
-    ("milkshakes",  ["best", "amazing", "great", "gourmet"],                                                 "milkshakes"),
-    ("milkshake",   ["best", "amazing", "great", "gourmet"],                                                 "milkshake"),
-    ("breakfast",   ["amazing", "great", "excellent", "best", "fantastic"],                                  "breakfast"),
-    ("lunch",       ["great", "amazing", "excellent", "best"],                                               "lunch"),
-    ("brunch",      ["great", "amazing", "excellent"],                                                       "brunch"),
-    ("views",       ["beautiful", "amazing", "great", "stunning", "incredible"],                             "views"),
-    ("vibes",       ["great", "good", "amazing", "fantastic", "wonderful"],                                  "vibes"),
-    ("meals",       ["amazing", "great", "delicious", "excellent", "fresh"],                                 "meals"),
-    ("burgers",     ["best", "great", "amazing", "incredible"],                                              "burgers"),
-    ("burger",      ["best", "great", "amazing", "incredible"],                                              "burger"),
-    ("cakes",       ["amazing", "great", "delicious", "best"],                                               "cakes"),
-    ("cake",        ["amazing", "great", "delicious", "best"],                                               "cake"),
-    ("coffee shop", ["best", "favourite", "amazing", "great"],                                               "coffee shop"),
-    ("place",       ["best", "amazing", "great", "favourite", "incredible", "perfect"],                      "place"),
-    ("spot",        ["best", "amazing", "great", "favourite", "perfect"],                                    "spot"),
+    ("atmosphere",  ["great", "amazing", "beautiful", "lovely", "wonderful", "vibey", "perfect"],     "atmosphere"),
+    ("breakfast",   ["amazing", "great", "excellent", "best", "fantastic"],                           "breakfast"),
+    ("lunch",       ["great", "amazing", "excellent", "best"],                                        "lunch"),
+    ("brunch",      ["great", "amazing", "excellent", "best"],                                        "brunch"),
+    ("views",       ["beautiful", "amazing", "great", "stunning", "incredible"],                      "views"),
+    ("vibes",       ["great", "good", "amazing", "fantastic"],                                        "vibes"),
+    ("meals",       ["amazing", "great", "delicious", "excellent", "fresh"],                          "meals"),
 ]
 
-# Adjectives that imply strong quality even without a paired noun
-_STRONG_STANDALONE = [
-    r'\bnever disappoint',         # "food never disappoints"
-    r'\bhighly recommend',         # "highly recommend"
-    r'\babsolutely top',           # "absolutely top-notch"
-]
+# Blacklisted highlight phrases — too generic to be meaningful
+_HIGHLIGHT_BLACKLIST: frozenset[str] = frozenset({
+    "good food",
+    "nice food",
+    "nice place",
+    "good place",
+    "very nice",
+    "good service",
+    "nice coffee",
+    "good coffee",
+    "good atmosphere",
+    "nice atmosphere",
+    "good meals",
+    "good views",
+})
 
 
-# ── Specific food/drink items to surface ──────────────────────────────────────
+# ── Specific food/drink/product items ─────────────────────────────────────────
+# Ordered most-specific → most-generic so earlier matches win.
 
 _ITEM_PATTERNS: list[tuple[str, str]] = [
-    # (regex_pattern, display_label) — ordered most specific → generic
-    (r'\bflat\s+white\b',          "Flat White"),
-    (r'\bcappuccino\b',             "Cappuccino"),
-    (r'\bcortado\b',                "Cortado"),
-    (r'\bmacchiato\b',              "Macchiato"),
-    (r'\bespresso\b',               "Espresso"),
-    (r'\bcold\s+brew\b',            "Cold Brew"),
-    (r'\biced\s+latte\b',           "Iced Latte"),
-    (r'\blatte\b',                  "Latte"),
-    (r'\bamericano\b',              "Americano"),
-    (r'\bpour[\s-]?over\b',         "Pour Over"),
-    (r'\bgourmet\s+milkshake',      "Gourmet Milkshakes"),
-    (r'\bmilkshake\b',              "Milkshakes"),
-    (r'\bsmoothie\b',               "Smoothies"),
-    (r'\bhot\s+chocolate\b',        "Hot Chocolate"),
-    (r'\beggs?\s+benedict\b',       "Eggs Benedict"),
-    (r'\bfried\s+eggs?\b',          "Fried Eggs"),
-    (r'\bscrambled\s+eggs?\b',      "Scrambled Eggs"),
-    (r'\bavocado\s+toast\b|avo\s+toast\b', "Avo Toast"),
-    (r'\bcroissant\b',              "Croissant"),
-    (r'\bfrench\s+toast\b',         "French Toast"),
-    (r'\bwaffle\b',                 "Waffles"),
-    (r'\bpancake\b',                "Pancakes"),
-    (r'\bscone\b',                  "Scones"),
-    (r'\bmuffin\b',                 "Muffins"),
-    (r'\bbrownie\b',                "Brownies"),
-    (r'\bcheesecake\b',             "Cheesecake"),
-    (r'\bcake\b',                   "Cake"),
-    (r'\bpastry\b|\bpastries\b',    "Pastries"),
-    (r'\bpie\b',                    "Pie"),
-    (r'\bsoup\b',                   "Soup"),
-    (r'\bsalad\b',                  "Salad"),
-    (r'\bsandwich\b|\bsandwiches\b',"Sandwiches"),
-    (r'\btoastie\b|\btoasted\s+sandwich\b', "Toasties"),
-    (r'\bwrap\b',                   "Wraps"),
-    (r'\bburger\b',                 "Burgers"),
-    (r'\bsteak\b',                  "Steak"),
-    (r'\bpasta\b',                  "Pasta"),
-    (r'\bpizza\b',                  "Pizza"),
-    (r'\bfish\b',                   "Fish"),
-    (r'\bchicken\b',                "Chicken"),
-    (r'\bbreakfast\s+special\b',    "Breakfast Special"),
+    (r'\bflat\s+white\b',                      "Flat White"),
+    (r'\bcappuccino\b',                         "Cappuccino"),
+    (r'\bcortado\b',                            "Cortado"),
+    (r'\bmacchiato\b',                          "Macchiato"),
+    (r'\bespresso\b',                           "Espresso"),
+    (r'\bcold\s+brew\b',                        "Cold Brew"),
+    (r'\biced\s+latte\b',                       "Iced Latte"),
+    (r'\blatte\b',                              "Latte"),
+    (r'\bamericano\b',                          "Americano"),
+    (r'\bpour[\s-]?over\b',                     "Pour Over"),
+    (r'\bgourmet\s+milkshakes?\b',              "Gourmet Milkshakes"),
+    (r'\bmilkshakes?\b',                        "Milkshakes"),
+    (r'\bsmoothies?\b',                         "Smoothies"),
+    (r'\bhot\s+chocolate\b',                    "Hot Chocolate"),
+    (r'\beggs?\s+benedict\b',                   "Eggs Benedict"),
+    (r'\bfried\s+eggs?\b',                      "Fried Eggs"),
+    (r'\bscrambled\s+eggs?\b',                  "Scrambled Eggs"),
+    (r'\bavocado\s+toast\b|\bavo\s+toast\b',    "Avo Toast"),
+    (r'\bcroissants?\b',                        "Croissant"),
+    (r'\bfrench\s+toast\b',                     "French Toast"),
+    (r'\bwaffles?\b',                           "Waffles"),
+    (r'\bpancakes?\b',                          "Pancakes"),
+    (r'\bscones?\b',                            "Scones"),
+    (r'\bmuffins?\b',                           "Muffins"),
+    (r'\bbrownies?\b',                          "Brownies"),
+    (r'\bcheesecake\b',                         "Cheesecake"),
+    (r'\bcakes?\b',                             "Cake"),
+    (r'\bpastries\b|\bpastry\b',               "Pastries"),
+    (r'\bpies?\b',                              "Pie"),
+    (r'\bsoups?\b',                             "Soup"),
+    (r'\bsalads?\b',                            "Salad"),
+    (r'\bsandwiches?\b',                        "Sandwiches"),
+    (r'\btoastie\b|\btoasted\s+sandwich\b',     "Toasties"),
+    (r'\bwraps?\b',                             "Wraps"),
+    (r'\bburgers?\b',                           "Burgers"),
+    (r'\bsteaks?\b',                            "Steak"),
+    (r'\bpastas?\b',                            "Pasta"),
+    (r'\bpizzas?\b',                            "Pizza"),
+    (r'\bsushis?\b',                            "Sushi"),
+    (r'\bbreakfast\s+special\b',               "Breakfast Special"),
+    (r'\bcharcuterie\b',                        "Charcuterie"),
 ]
 
 
 # ── Experience / vibe tags ────────────────────────────────────────────────────
+# STRICT: must NOT overlap with quality highlights.
+# No "great service", "friendly staff", "great atmosphere" here —
+# those are handled by _QUALITY_NOUNS.
 
 _EXPERIENCE_TAGS: list[tuple[str, str]] = [
-    # (regex, display_label)
-    (r'\bfamily[\s-]?friendly\b',                                                "Family friendly"),
+    (r'\bfamily[\s-]?friendly\b|\bkid[\s-]?friendly\b|\bchildren.{0,15}welcom', "Family friendly"),
     (r'\bdog[\s-]?friendly\b',                                                   "Dog friendly"),
     (r'\bpet[\s-]?friendly\b',                                                   "Pet friendly"),
-    (r'\bkid[\s-]?friendly\b|\bchildren.{0,15}welcom',                          "Family friendly"),
     (r'\bhidden gem\b',                                                          "Hidden gem"),
     (r'\boutdoor\s+(seating|dining|area|terrace)\b',                             "Outdoor seating"),
     (r'\blive\s+music\b',                                                        "Live music"),
-    (r'\bbeautiful\s+(views?|scenery|setting|surroundings)\b',                   "Beautiful views"),
-    (r'\bamazing\s+(views?|scenery|setting)\b|\bstunning\s+views?\b',            "Beautiful views"),
+    (r'\bbeautiful\s+(views?|scenery|setting|surroundings)\b'
+     r'|\bamazing\s+(views?|scenery|setting)\b|\bstunning\s+views?\b',           "Beautiful views"),
     (r'\bgreat\s+for\s+breakfast\b|\bbreakfast\s+(spot|place|destination)\b',   "Great for breakfast"),
-    (r'\bgreat\s+for\s+(lunch|brunch)\b|\b(lunch|brunch)\s+spot\b',             "Good for lunch"),
+    (r'\bgreat\s+for\s+(lunch|brunch)\b|\b(lunch|brunch)\s+(spot|place)\b',     "Good for lunch"),
+    # Cosy — describes type/feel of atmosphere, not quality
     (r'\bcosy\b|\bcozy\b',                                                       "Cosy atmosphere"),
+    # Vibey/vibes — distinct enough from "Great atmosphere" quality signal
     (r'\bvibey\b|\bgreat\s+vibes?\b|\bamazing\s+vibes?\b|\bgood\s+vibes?\b',    "Great vibes"),
-    # broad atmosphere — catches "great atmosphere", "beautiful atmosphere", "lovely atmosphere"
-    (r'\b(great|amazing|beautiful|lovely|wonderful|perfect)\s+atmosphere\b',    "Great atmosphere"),
-    # friendly staff — catches "friendly staff", "welcoming staff", "amazing staff"
-    (r'\b(friendly|welcoming|amazing|wonderful|inviting)\s+staff\b',            "Friendly staff"),
-    # great service — catches "great service", "top-notch service", "service was spot on"
-    (r'\b(great|excellent|amazing|top[\s-]?notch|spot\s+on)\s+service\b'
-     r'|\bservice\s+(was\s+)?(top[\s-]?notch|excellent|amazing|spot\s+on|perfect)\b', "Great service"),
     (r'\bwarm\s+(welcome|service|atmosphere)\b|\bwarm\s+and\s+welcom',           "Warm welcome"),
     (r'\bperfect\s+(spot|place|setting|location)\b',                             "Perfect spot"),
     (r'\binstagram(mable)?\b|\bphoto[\s-]?worthy\b',                             "Instagram-worthy"),
     (r'\brelax(ing|ed)?\b|\bpeaceful\b|\bquiet\s+(spot|place|setting)\b',       "Relaxed vibe"),
+    (r'\bscenic\b',                                                              "Scenic location"),
+    (r'\bmeander\b',                                                             "On the Midlands Meander"),
 ]
+
+# Meaningful nouns that make a hero quote worth using
+_QUOTE_SIGNAL_NOUNS = frozenset({
+    "coffee", "food", "service", "staff", "atmosphere", "view", "views",
+    "meal", "meals", "breakfast", "lunch", "brunch", "experience",
+    "milkshake", "milkshakes", "burger", "burgers", "cake", "pastry",
+    "flat white", "cappuccino", "espresso", "menu", "place", "spot",
+    "recommend", "recommended",
+})
+
+# Quotes with these phrases are too generic to surface
+_QUOTE_BLACKLIST: frozenset[str] = frozenset({
+    "nice place", "good place", "good food", "nice food",
+    "very nice", "very good", "not bad",
+})
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def _norm(text: str) -> str:
-    """Normalise: lowercase, collapse whitespace."""
+    """Lowercase, collapse whitespace."""
     return re.sub(r'\s+', ' ', (text or "").lower().strip())
 
 
-def _positive_reviews(reviews: list) -> list[str]:
-    """Return normalised text from reviews with rating >= 4."""
+def _format_phrase(phrase: str) -> str:
+    """
+    Final format for any extracted phrase:
+    - Title-case the first word only
+    - Strip trailing punctuation
+    - Enforce max 4 words
+    - Strip whitespace
+    """
+    phrase = phrase.strip().rstrip(".,;:!?")
+    words = phrase.split()
+    if len(words) > 4:
+        words = words[:4]
+    if not words:
+        return ""
+    words[0] = words[0].capitalize()
+    return " ".join(words)
+
+
+def _positive_texts(reviews: list) -> list[str]:
+    """Normalised text from reviews with rating >= 4."""
     return [
         _norm(r.get("text", "") or "")
         for r in reviews
@@ -157,153 +194,228 @@ def _positive_reviews(reviews: list) -> list[str]:
     ]
 
 
-def _all_reviews_text(reviews: list) -> list[str]:
-    """Return normalised text from all reviews."""
-    return [_norm(r.get("text", "") or "") for r in reviews]
+# ── Highlight extraction ──────────────────────────────────────────────────────
 
-
-# ── Extraction functions ──────────────────────────────────────────────────────
-
-def _extract_highlights(positive_texts: list[str]) -> list[str]:
+def _extract_highlights(pos_texts: list[str]) -> list[str]:
     """
-    Find top quality highlights from positive (4+ star) reviews.
+    Extract category-level quality highlights from positive reviews.
 
-    For each quality noun:
-    1. Count how many reviews mention it
-    2. Find the best adjacent adjective from the preferred list
-    3. Build a 2-word highlight phrase, capitalised
+    Algorithm:
+    1. For each quality noun, count how many reviews mention it
+    2. Find the best adjacent positive adjective
+    3. Form a 2-word phrase and apply formatting + blacklist
+    4. Sort by frequency, return top 5
+    5. Deduplicate by noun root (no two phrases for the same noun)
 
-    Returns max 5 highlights sorted by frequency descending.
+    Returns max 5 highlights, each ≤ 4 words, not in blacklist.
     """
-    combined = " ".join(positive_texts)
-    highlights: list[tuple[int, str]] = []
-    used_labels: set[str] = set()
+    if not pos_texts:
+        return []
 
-    for noun_pattern, preferred_adjs, display_label in _QUALITY_NOUNS:
-        # Skip if this label (or a near-duplicate) is already captured
-        base_key = display_label.split()[0]
-        if base_key in used_labels:
+    combined = " ".join(pos_texts)
+    scored: list[tuple[int, str]] = []
+    used_noun_roots: set[str] = set()
+
+    for noun, preferred_adjs, label in _QUALITY_NOUNS:
+        root = label.split()[0]  # e.g. "coffee" from "coffee", "flat" from "flat white"
+        if root in used_noun_roots:
             continue
 
-        # Count mentions across individual reviews
-        count = sum(1 for t in positive_texts if re.search(r'\b' + re.escape(noun_pattern) + r'\b', t))
+        # How many reviews mention this noun?
+        count = sum(1 for t in pos_texts if re.search(r'\b' + re.escape(noun) + r'\b', t))
         if count == 0:
             continue
 
-        # Find best adjective adjacent to noun
-        chosen_adj = None
+        # Find the best adjective paired with this noun
+        chosen_adj: str | None = None
         for adj in preferred_adjs:
-            # adj appears within 25 chars BEFORE the noun
-            if re.search(r'\b' + re.escape(adj) + r'.{0,25}\b' + re.escape(noun_pattern) + r'\b', combined):
+            # adj … noun  (adj within 25 chars before noun)
+            if re.search(r'\b' + re.escape(adj) + r'.{0,25}\b' + re.escape(noun) + r'\b', combined):
                 chosen_adj = adj
                 break
-            # noun appears within 25 chars BEFORE the adj (reverse order)
-            if re.search(r'\b' + re.escape(noun_pattern) + r'.{0,25}\b' + re.escape(adj) + r'\b', combined):
+            # noun … adj  (adj within 25 chars after noun)
+            if re.search(r'\b' + re.escape(noun) + r'.{0,25}\b' + re.escape(adj) + r'\b', combined):
                 chosen_adj = adj
                 break
 
+        # Build phrase
         if chosen_adj:
-            phrase = f"{chosen_adj.capitalize()} {display_label}"
+            raw_phrase = f"{chosen_adj} {label}"
         elif count >= 2:
-            # Noun mentioned multiple times but no adj found — still worth surfacing
-            phrase = display_label.capitalize()
+            # Mentioned multiple times, no adj found — noun alone is still a signal
+            raw_phrase = label
         else:
-            # Single mention, no adjective — skip (too weak)
+            continue  # single mention, no adj: too weak
+
+        phrase = _format_phrase(raw_phrase)
+        if not phrase:
             continue
 
-        highlights.append((count, phrase))
-        used_labels.add(base_key)
+        # Blacklist check
+        if phrase.lower() in _HIGHLIGHT_BLACKLIST:
+            continue
 
-    # Sort by frequency desc, deduplicate, return top 5
-    highlights.sort(key=lambda x: -x[0])
-    return [phrase for _, phrase in highlights[:5]]
+        scored.append((count, phrase))
+        used_noun_roots.add(root)
+
+    # Sort by frequency descending, return top 5
+    scored.sort(key=lambda x: -x[0])
+    return [p for _, p in scored[:5]]
 
 
-def _extract_signature_items(positive_texts: list[str]) -> list[str]:
+# ── Signature item extraction ─────────────────────────────────────────────────
+
+def _extract_signature_items(pos_texts: list[str]) -> list[str]:
     """
-    Find specific menu/product items mentioned in positive reviews.
-    Returns max 5 items, ordered by how early they appear in the pattern list
-    (most specific matches first).
+    Find specific named menu/product items mentioned in positive reviews.
+
+    Ordered most-specific → most-generic so earlier matches win.
+    Deduplicates by normalised last-word to avoid "Milkshakes" after "Gourmet Milkshakes".
+    Returns max 5 items.
     """
-    combined = " ".join(positive_texts)
+    if not pos_texts:
+        return []
+
+    combined = " ".join(pos_texts)
     found: list[str] = []
-    seen_labels: set[str] = set()
+    seen_roots: set[str] = set()
 
     for pattern, label in _ITEM_PATTERNS:
-        if label in seen_labels:
-            continue
         if re.search(pattern, combined, re.IGNORECASE):
-            # Avoid near-duplicates (e.g. "Milkshakes" after "Gourmet Milkshakes")
-            base = label.lower().split()[-1]
-            if base not in seen_labels:
-                found.append(label)
-                seen_labels.add(label)
-                seen_labels.add(base)
+            # Root = last word of label (lowercased) for near-dup detection
+            root = label.lower().split()[-1]
+            if root not in seen_roots:
+                found.append(_format_phrase(label))
+                seen_roots.add(label.lower())
+                seen_roots.add(root)
         if len(found) >= 5:
             break
 
     return found
 
 
-def _extract_experience_tags(positive_texts: list[str]) -> list[str]:
+# ── Experience tag extraction ─────────────────────────────────────────────────
+
+def _extract_experience_tags(pos_texts: list[str]) -> list[str]:
     """
     Match predefined experience / vibe phrases from positive reviews.
+    These are STRICTLY experiential — no overlap with highlight quality nouns.
     Returns max 5 unique tags.
     """
-    combined = " ".join(positive_texts)
+    if not pos_texts:
+        return []
+
+    combined = " ".join(pos_texts)
     tags: list[str] = []
-    seen_labels: set[str] = set()
+    seen: set[str] = set()
 
     for pattern, label in _EXPERIENCE_TAGS:
-        if label in seen_labels:
+        if label in seen:
             continue
         if re.search(pattern, combined, re.IGNORECASE):
-            tags.append(label)
-            seen_labels.add(label)
+            formatted = _format_phrase(label)
+            if formatted and formatted not in seen:
+                tags.append(formatted)
+                seen.add(formatted)
         if len(tags) >= 5:
             break
 
     return tags
 
 
+# ── Hero quote selection ──────────────────────────────────────────────────────
+
 def _pick_quote(reviews: list) -> str:
     """
-    Pick the best single review quote for the hero section.
+    Select the best single hero quote.
 
-    Priority:
-    1. 5-star reviews with 40–180 chars of clean text
-    2. 4-star reviews
-    3. Any review
+    Requirements:
+    - rating >= 4
+    - cleaned length 40–120 chars
+    - contains at least one meaningful noun
+    - not in the generic-phrase blacklist
 
-    Truncates to 120 chars at a word boundary.
+    Falls back progressively:
+    1. 5-star reviews in ideal 40-120 char range with noun signal
+    2. 4-star reviews same criteria
+    3. Any 4+ star review with noun signal (truncated to 120 chars)
+    4. Empty string — never force a bad quote
     """
-    def _clean_text(text: str) -> str:
+    def _clean(text: str) -> str:
         text = re.sub(r'\s+', ' ', text).strip()
-        # Remove leading emoji/symbol noise
         text = re.sub(r'^[^a-zA-Z"\']+', '', text).strip()
         return text
 
-    # Sort: 5-star first, then by text length (prefer medium-length quotes)
-    sorted_reviews = sorted(
-        reviews,
-        key=lambda r: (-int(r.get("rating") or 0), -min(len(r.get("text") or ""), 150)),
-    )
+    def _has_signal(text: str) -> bool:
+        tl = text.lower()
+        return any(re.search(r'\b' + re.escape(n) + r'\b', tl) for n in _QUOTE_SIGNAL_NOUNS)
 
-    for r in sorted_reviews:
-        text = _clean_text(r.get("text") or "")
-        if len(text) < 30:
-            continue
-        # Skip reviews that are mostly negative signals
-        negative_signals = ["not allowed", "no vegan", "wouldn't allow", "terrible", "awful", "worst"]
-        if any(sig in text.lower() for sig in negative_signals):
-            continue
-        # Truncate at 120 chars, word boundary
+    def _is_blacklisted(text: str) -> bool:
+        tl = text.lower()
+        return any(bl in tl for bl in _QUOTE_BLACKLIST)
+
+    def _truncate(text: str) -> str:
         if len(text) <= 120:
             return text
-        truncated = text[:120].rsplit(' ', 1)[0].rstrip(',.:;')
-        return truncated + "…"
+        return text[:120].rsplit(' ', 1)[0].rstrip('.,;:') + "…"
 
-    return ""
+    def _signal_count(text: str) -> int:
+        """Count how many distinct signal nouns appear in the text."""
+        tl = text.lower()
+        return sum(1 for n in _QUOTE_SIGNAL_NOUNS
+                   if re.search(r'\b' + re.escape(n) + r'\b', tl))
+
+    # Sort: highest rating first, then most signal nouns, then longest (up to 120 chars)
+    candidates = sorted(
+        [r for r in reviews if int(r.get("rating") or 0) >= 4],
+        key=lambda r: (
+            -int(r.get("rating") or 0),
+            -_signal_count(_clean(r.get("text") or "")),
+            -min(len(_clean(r.get("text") or "")), 120),
+        ),
+    )
+
+    # Pass 1: ideal range, has signal, not blacklisted
+    for r in candidates:
+        text = _clean(r.get("text") or "")
+        if len(text) < 40:
+            continue
+        if _is_blacklisted(text):
+            continue
+        if not _has_signal(text):
+            continue
+        return _truncate(text)
+
+    # Pass 2: relax length floor to 30, still need signal
+    for r in candidates:
+        text = _clean(r.get("text") or "")
+        if len(text) < 30:
+            continue
+        if _is_blacklisted(text):
+            continue
+        if not _has_signal(text):
+            continue
+        return _truncate(text)
+
+    # Pass 3: anything from a 4+ star review that isn't blacklisted
+    for r in candidates:
+        text = _clean(r.get("text") or "")
+        if len(text) < 20:
+            continue
+        if _is_blacklisted(text):
+            continue
+        return _truncate(text)
+
+    return ""  # No usable quote — omit rather than force a bad one
+
+
+# ── None-safe normalisation ───────────────────────────────────────────────────
+
+def _safe_list(val) -> list:
+    """Ensure value is a non-None list."""
+    if not val:
+        return []
+    return [item for item in val if item]
 
 
 # ── Public entry point ────────────────────────────────────────────────────────
@@ -312,38 +424,42 @@ def extract_review_intel(reviews: list) -> dict:
     """
     Extract structured insight from a list of review dicts.
 
-    Each review dict should have:
-        text   : str   — review body
-        rating : int   — 1-5 star rating
-        author : str   — reviewer name (optional, not used)
+    Each dict should have:
+        text   : str  — review body
+        rating : int  — 1–5 star rating
 
     Returns:
         {
-            top_highlights  : list[str],  # max 5, e.g. "Great coffee"
-            signature_items : list[str],  # max 5, e.g. "Flat White"
-            experience_tags : list[str],  # max 5, e.g. "Cosy atmosphere"
-            top_review_quote: str,        # max 120 chars, real review text
+            top_highlights  : list[str],  # category phrases, e.g. "Great coffee"
+            signature_items : list[str],  # named items, e.g. "Flat White"
+            experience_tags : list[str],  # vibe/experience, e.g. "Cosy atmosphere"
+            top_review_quote: str,        # real review quote ≤ 120 chars
         }
 
-    Returns empty arrays/string if reviews are absent or too weak to extract
-    meaningful signals. Never fabricates content.
+    All arrays default to []. Quote defaults to "".
+    Never fabricates content.
     """
+    _empty = {
+        "top_highlights":   [],
+        "signature_items":  [],
+        "experience_tags":  [],
+        "top_review_quote": "",
+    }
+
     if not reviews:
-        return {
-            "top_highlights":    [],
-            "signature_items":   [],
-            "experience_tags":   [],
-            "top_review_quote":  "",
-        }
+        return _empty
 
-    positive_texts = _positive_reviews(reviews)
+    pos_texts = _positive_texts(reviews)
 
-    # Failsafe: if fewer than 2 positive reviews, signals will be too sparse
-    # Still attempt extraction but accept the result may be empty
-    top_highlights   = _extract_highlights(positive_texts) if positive_texts else []
-    signature_items  = _extract_signature_items(positive_texts) if positive_texts else []
-    experience_tags  = _extract_experience_tags(positive_texts) if positive_texts else []
+    top_highlights   = _safe_list(_extract_highlights(pos_texts))
+    signature_items  = _safe_list(_extract_signature_items(pos_texts))
+    experience_tags  = _safe_list(_extract_experience_tags(pos_texts))
     top_review_quote = _pick_quote(reviews)
+
+    # ── Cross-deduplication: remove any experience_tag that exactly matches a highlight ──
+    if top_highlights:
+        hl_lower = {h.lower() for h in top_highlights}
+        experience_tags = [t for t in experience_tags if t.lower() not in hl_lower]
 
     return {
         "top_highlights":   top_highlights,

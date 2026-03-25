@@ -9,9 +9,16 @@ function renderStars(rating: number): string {
   return '★'.repeat(full) + (half ? '½' : '') + '☆'.repeat(empty)
 }
 
+// Minimum items needed to render a section — prevents thin/empty-looking sections
+const MIN_PILLS = 2
+
 function hasIntelContent(ri: ReviewIntel | undefined): boolean {
   if (!ri) return false
-  return ri.top_highlights.length > 0 || ri.signature_items.length > 0 || ri.experience_tags.length > 0
+  return (
+    ri.top_highlights.length >= MIN_PILLS ||
+    ri.signature_items.length >= MIN_PILLS ||
+    ri.experience_tags.length >= MIN_PILLS
+  )
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -404,7 +411,7 @@ export default function WebsiteEngine({ data }: { data: BusinessData }) {
       {useReviewIntel ? (
         <>
           {/* WHAT CUSTOMERS SAY MOST */}
-          {review_intel!.top_highlights.length > 0 && (
+          {review_intel!.top_highlights.length >= MIN_PILLS && (
             <section className="we-section we-intel-section-light">
               <div className="we-container">
                 <div className="we-section-header">
@@ -420,7 +427,7 @@ export default function WebsiteEngine({ data }: { data: BusinessData }) {
           )}
 
           {/* POPULAR WITH CUSTOMERS */}
-          {review_intel!.signature_items.length > 0 && (
+          {review_intel!.signature_items.length >= MIN_PILLS && (
             <section className="we-section we-intel-section-white">
               <div className="we-container">
                 <div className="we-section-header">
@@ -436,7 +443,7 @@ export default function WebsiteEngine({ data }: { data: BusinessData }) {
           )}
 
           {/* THE EXPERIENCE */}
-          {review_intel!.experience_tags.length > 0 && (
+          {review_intel!.experience_tags.length >= MIN_PILLS && (
             <section className="we-section we-intel-section-light">
               <div className="we-container">
                 <div className="we-section-header">

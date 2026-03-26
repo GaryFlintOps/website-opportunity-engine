@@ -70,14 +70,268 @@ def _save_cache(query: str, leads: list[dict]) -> None:
         print(f"[Fetcher] Cache write error: {e}")
 
 
-# ── Light filter (dedupe + empty removal) ────────────────────────────────────
+# ── Industry keyword map ──────────────────────────────────────────────────────
+# Maps an industry term to keywords that should appear in the business
+# name or category for it to be considered a relevant result.
+INDUSTRY_KEYWORDS: dict[str, list[str]] = {
+    "bike":         ["bike", "bicycle", "cycling", "cycle", "velo"],
+    "bicycle":      ["bike", "bicycle", "cycling", "cycle", "velo"],
+    "cycling":      ["bike", "bicycle", "cycling", "cycle", "velo"],
+    "cycle":        ["bike", "bicycle", "cycling", "cycle", "velo"],
+    "dentist":      ["dentist", "dental", "orthodont", "smile"],
+    "dental":       ["dentist", "dental", "orthodont", "smile"],
+    "cafe":         ["cafe", "café", "coffee", "espresso", "bistro", "roastery"],
+    "coffee":       ["cafe", "café", "coffee", "espresso", "roastery"],
+    "restaurant":   ["restaurant", "dining", "kitchen", "eatery", "grill", "bistro", "diner"],
+    "gym":          ["gym", "fitness", "crossfit", "training", "sport", "health club"],
+    "fitness":      ["gym", "fitness", "crossfit", "training", "sport", "studio"],
+    "salon":        ["salon", "hair", "beauty", "styling", "coiffeur"],
+    "barber":       ["barber", "barbershop", "hair", "shave", "grooming", "cuts"],
+    "barbershop":   ["barber", "barbershop", "hair", "shave", "grooming", "cuts"],
+    "spa":          ["spa", "massage", "wellness", "therapy", "retreat"],
+    "bakery":       ["bakery", "baker", "bread", "pastry", "cake", "bake"],
+    "plumber":      ["plumb", "plumbing", "pipe", "drain", "water"],
+    "electrician":  ["electric", "electrical", "wiring", "power"],
+    "cleaning":     ["clean", "cleaning", "hygiene", "maid"],
+    "mechanic":     ["mechanic", "auto", "vehicle", "car service", "garage", "workshop", "motor"],
+    "hotel":        ["hotel", "accommodation", "lodge", "inn", "guesthouse", "guest house", "rooms"],
+    "lodge":        ["lodge", "accommodation", "hotel", "inn", "guesthouse", "retreat", "resort"],
+    "guest house":  ["guesthouse", "guest house", "accommodation", "hotel", "inn", "bnb", "b&b"],
+    "florist":      ["florist", "flower", "floral", "bloom", "bouquet"],
+    "lawyer":       ["law", "legal", "attorney", "advocate", "solicitor"],
+    "accountant":   ["accountant", "accounting", "tax", "auditor", "bookkeep"],
+    "pharmacy":     ["pharmacy", "chemist", "drug", "pharmaceutical"],
+    "optometrist":  ["optom", "optician", "eye", "vision", "glasses"],
+}
+
+# ── Bad keywords — hard-reject in business name OR category ──────────────────
+# These indicate the result is clearly unrelated to any typical SMB search.
+BAD_KEYWORDS: list[str] = [
+    "hospital",
+    "school",
+    "college",
+    "university",
+    "primary school",
+    "high school",
+    "farm",
+    "shopping mall",
+    "shopping centre",
+    "shopping center",
+    "game reserve",
+    "nature reserve",
+    "funeral",
+    "cemetery",
+    "municipality",
+    "government",
+    "police",
+    "prison",
+]
+
+# ── Bad business types — reject B2B / non-consumer businesses ─────────────────
+# Wholesalers, distributors etc. are not SMB website prospects.
+BAD_BUSINESS_TYPES: list[str] = [
+    "wholesale",
+    "wholesaler",
+    "supplier",
+    "distribution",
+    "distributor",
+    "manufacturer",
+    "manufacturing",
+    "importer",
+    "exporter",
+    # Industrial / trade — surface in bike, gym, mechanics searches
+    "repair center",
+    "repair centre",
+    "service center",
+    "service centre",
+    "parts supplier",
+    "parts store",
+    "equipment rental",
+    "equipment hire",
+    "trade centre",
+    "trade center",
+]
+
+
+# ── Multi-query builder ────────────────────────────────────────────────────────
+
+def build_queries(industry: str, location: str) -> list[str]:
+    """
+    Build a list of varied search strings for one industry + location.
+    Passed together as searchStringsArray in a single Apify call so
+    Apify fetches all variants in parallel (no extra cost / time).
+    """
+    return [
+        f"{industry} {location}",
+        f"{industry} near {location}",
+        f"{industry} shop {location}",
+        f"{industry} store {location}",
+        f"best {industry} {location}",
+    ]
+
+
+# ── Deduplication ──────────────────────────────────────────────────────────────
+
+def deduplicate(places: list[dict]) -> list[dict]:
+    """
+    Remove duplicates across multi-query results.
+    Key = Google Maps place_id (most reliable).
+    Fallback key = normalised name + address.
+    Also removes entries with no name or name == "Unknown".
+    """
+    seen: set[str] = set()
+    unique: list[dict] = []
+    for p in places:
+        name = (p.get("name") or "").strip()
+        if not name or name == "Unknown":
+            continue
+        place_id = (p.get("place_id") or "").strip()
+        if place_id:
+            key = place_id
+        else:
+            addr = (p.get("address") or "").lower().strip()
+            key = f"{name.lower()}|{addr}"
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(p)
+    return unique
+
+
+# ── Relevance confidence helper ───────────────────────────────────────────────
+
+def _relevance_confidence(place: dict, keywords: list[str]) -> int:
+    """
+    Return a confidence score (0–3) for how well the place matches keywords.
+    0 = no match at all → caller should reject.
+    """
+    name     = (place.get("name")     or "").lower()
+    category = (place.get("category") or "").lower()
+    score = 0
+    if any(k in name     for k in keywords): score += 2   # name match = strong
+    if any(k in category for k in keywords): score += 1   # category = weaker
+    return score
+
+
+def _get_matched_keywords(place: dict, keywords: list[str]) -> list[str]:
+    """Return the subset of keywords that appear in name or category."""
+    name     = (place.get("name")     or "").lower()
+    category = (place.get("category") or "").lower()
+    return [k for k in keywords if k in name or k in category]
+
+
+def _lookup_keywords(industry: str) -> list[str] | None:
+    """Return the keyword list for an industry, or None if not mapped."""
+    ind = industry.lower().strip()
+    for key, kws in INDUSTRY_KEYWORDS.items():
+        if key in ind or ind in key:
+            return kws
+    return None
+
+
+# ── Relevance filter ──────────────────────────────────────────────────────────
+
+def is_relevant(place: dict, industry: str) -> bool:
+    """
+    Return True if the place is relevant to the searched industry.
+
+    Order matters — REJECT first, then ACCEPT:
+    1. BAD_KEYWORDS in name OR category  → False  (hard reject, checked first)
+    2. No keyword map for industry        → True   (unknown industry, be permissive)
+    3. confidence == 0                    → False  (keyword map exists, zero match)
+    4. confidence > 0                     → True
+    """
+    name     = (place.get("name")     or "").lower()
+    category = (place.get("category") or "").lower()
+
+    # ── 1. Hard reject — BAD_KEYWORDS in name OR category ────────────────
+    if any(bad in name     for bad in BAD_KEYWORDS): return False
+    if any(bad in category for bad in BAD_KEYWORDS): return False
+
+    # ── 2. Hard reject — B2B / non-consumer business types ───────────────
+    if any(bad in name     for bad in BAD_BUSINESS_TYPES): return False
+    if any(bad in category for bad in BAD_BUSINESS_TYPES): return False
+
+    # ── Find keyword list for this industry ────────────────────────────────
+    keywords = _lookup_keywords(industry)
+
+    # ── 3. No keyword map → permissive ────────────────────────────────────
+    if keywords is None:
+        return True
+
+    # ── 4 & 5. Confidence gate ─────────────────────────────────────────────
+    return _relevance_confidence(place, keywords) > 0
+
+
+# ── Relevance scoring (for ranking qualified leads before opportunity score) ──
+
+def _relevance_score(place: dict, industry: str, location: str = "") -> int:
+    """
+    Rank qualified leads by business quality on a -5 … +6 scale.
+    Higher = more established, better-rated, geographically proximate.
+
+    NOTE: keyword match is intentionally NOT scored here — that is
+    is_relevant()'s job. This function is purely about lead quality
+    so the two concerns stay cleanly separated.
+
+    Signals:
+      Rating:   +2 (>=4.5), +1 (>=4.0)
+      Reviews:  +2 (>=50),  +1 (>=20),  -2 (<5)
+      Website:  -1 (has one — harder sell), +2 (none — prime target)
+      Location: +1 (address contains search location token), -1 (does not)
+    """
+    score = 0
+    address = (place.get("address") or "").lower()
+    rating  = float(place.get("rating")      or 0)
+    reviews = int(place.get("reviews_count") or 0)
+    website = bool(place.get("website"))
+
+    # ── Rating quality ─────────────────────────────────────────────────────
+    if rating >= 4.5:
+        score += 2
+    elif rating >= 4.0:
+        score += 1
+
+    # ── Review count (establishment / trust signal) ────────────────────────
+    if reviews >= 50:
+        score += 2
+    elif reviews >= 20:
+        score += 1
+    elif reviews < 5:
+        score -= 2          # ghost / just-opened / closed — skip if possible
+
+    # ── Website absence = OPPORTUNITY ─────────────────────────────────────
+    # No website → strong lead (that's the whole product).
+    # Has website → slight penalty (harder sell, but not disqualifying).
+    if not website:
+        score += 2
+    else:
+        score -= 1
+
+    # ── Location proximity bias ────────────────────────────────────────────
+    # +1 if any significant location token appears in the address,
+    # -1 if a specific place was searched but doesn't show up at all.
+    if location and address:
+        loc_tokens = [
+            t.strip().lower()
+            for t in location.replace(",", " ").split()
+            if len(t.strip()) > 3
+        ]
+        if loc_tokens:
+            if any(tok in address for tok in loc_tokens):
+                score += 1
+            else:
+                score -= 1
+
+    return score
+
+
+# ── Light filter (kept for backward compatibility) ────────────────────────────
 
 def light_filter(results: list[dict]) -> list[dict]:
     """
-    Minimal filtering only:
-    - Remove entries with no name
-    - Deduplicate by name (case-insensitive, keep first occurrence)
-    NO location filtering — return everything Apify gives us.
+    Legacy single-query dedup — kept so nothing breaks if called elsewhere.
+    New code should use deduplicate() which handles multi-query merges.
     """
     seen_names: set[str] = set()
     out: list[dict] = []
@@ -98,7 +352,6 @@ def light_filter(results: list[dict]) -> list[dict]:
 def filter_by_location(results: list[dict], location: str) -> list[dict]:
     """
     DEPRECATED — no longer called. Kept for reference only.
-    Previously filtered results to only those matching the location string.
     """
     return results
 
@@ -260,48 +513,30 @@ def _mock_leads(industry: str, location: str) -> list[dict]:
     return leads
 
 
-# ── Main entry point ──────────────────────────────────────────────────────────
+# ── Apify HTTP call (single run, multiple search strings) ────────────────────
 
-def fetch_leads(industry: str, location: str) -> list[dict]:
+def _apify_fetch(queries: list[str], location: str) -> list[dict]:
     """
-    Fetch leads for (industry, location).
-
-    LOCAL_MODE=true  → returns mock data (offline/CI use only)
-    LOCAL_MODE=false → calls Apify Google Maps actor (default)
-
-    Raises on API key missing or Apify failure. Never returns empty silently.
+    Execute one Apify run with all search strings in searchStringsArray.
+    Apify processes them in parallel — same cost/time as a single query
+    but returns results from every variant.
+    Returns raw Apify items (un-normalised).
+    Raises on API/network errors.
     """
-
-    # ── LOCAL MODE (explicit opt-in only) ──────────────────────────────────
-    if LOCAL_MODE:
-        print("[Fetcher] LOCAL MODE ACTIVE — returning mock data")
-        leads = _mock_leads(industry, location)
-        _last_fetch_stats["raw"]      = len(leads)
-        _last_fetch_stats["filtered"] = len(leads)
-        print(f"[Fetcher] Retrieved {len(leads)} leads (mock)")
-        return leads
-
-    # ── LIVE APIFY MODE ────────────────────────────────────────────────────
     if not APIFY_API_TOKEN:
         raise Exception(
             "APIFY_API_TOKEN not set — cannot run live search. "
             "Add it to your .env or Render environment variables."
         )
 
-    search_query = f"{industry} in {location}"
     region_code  = _guess_region_code(location)
-
-    print(f"[Fetcher] Running Apify actor (LIVE MODE)")
-    print(f"[Fetcher] Query: '{search_query}'  |  Actor: {APIFY_ACTOR_ID}")
-
-    # ── Live Apify call (cache skipped — always fetch fresh from Google Maps) ──
     actor_api_id = APIFY_ACTOR_ID.replace("/", "~")
     url = (
         f"https://api.apify.com/v2/acts/{actor_api_id}"
         f"/run-sync-get-dataset-items"
     )
     payload = {
-        "searchStringsArray":        [f"{industry} in {location}"],
+        "searchStringsArray":        queries,        # all variants in one call
         "locationQuery":             location,
         "maxCrawledPlacesPerSearch": MAX_PLACES,
         "maxReviews":                MAX_REVIEWS,
@@ -310,8 +545,8 @@ def fetch_leads(industry: str, location: str) -> list[dict]:
         "countryCode":               (region_code or "za").lower(),
     }
 
-    print(f"[Fetcher] POST {url}")
-    print(f"[Fetcher] Waiting for Apify to complete (timeout: {SYNC_TIMEOUT}s)...")
+    print(f"[Search] POST {url}")
+    print(f"[Search] Waiting for Apify (timeout: {SYNC_TIMEOUT}s, {len(queries)} queries)...")
 
     try:
         resp = requests.post(
@@ -321,13 +556,11 @@ def fetch_leads(industry: str, location: str) -> list[dict]:
             timeout=SYNC_TIMEOUT,
         )
     except requests.exceptions.Timeout:
-        raise Exception(
-            f"Fetcher failed: Apify request timed out after {SYNC_TIMEOUT}s."
-        )
+        raise Exception(f"Fetcher failed: Apify timed out after {SYNC_TIMEOUT}s.")
     except requests.exceptions.RequestException as e:
         raise Exception(f"Fetcher failed: HTTP error calling Apify: {e}")
 
-    print(f"[Fetcher] Apify response status: {resp.status_code}")
+    print(f"[Search] Apify HTTP {resp.status_code}")
 
     if resp.status_code not in (200, 201):
         raise Exception(
@@ -337,34 +570,120 @@ def fetch_leads(industry: str, location: str) -> list[dict]:
     try:
         items = resp.json()
     except Exception as e:
-        raise Exception(f"Fetcher failed: Could not parse Apify JSON response: {e}")
+        raise Exception(f"Fetcher failed: Could not parse Apify JSON: {e}")
 
     if not items or not isinstance(items, list):
         raise Exception(
-            f"Fetcher failed: Apify returned no data for query '{search_query}'. "
+            f"Fetcher failed: Apify returned no data for queries {queries}. "
             "Check actor ID, API token, and search terms."
         )
 
-    print(f"[Fetcher] Retrieved {len(items)} raw items from Apify")
+    return items
 
-    leads = [
+
+# ── Main entry point ──────────────────────────────────────────────────────────
+
+def fetch_leads(industry: str, location: str) -> list[dict]:
+    """
+    Full qualification pipeline:
+
+    1. Build multi-variant search queries
+    2. Single Apify call with all queries in searchStringsArray
+    3. Normalise + deduplicate (by place_id or name+address)
+    4. Relevance filter (reject hospitals, farms, wrong categories, etc.)
+    5. Rank by relevance score; cap at MAX_PLACES
+    6. Return clean, qualified leads ready for opportunity scoring
+
+    LOCAL_MODE=true  → returns mock data (offline/CI only)
+    LOCAL_MODE=false → live Apify (default)
+    """
+
+    # ── LOCAL MODE ──────────────────────────────────────────────────────────
+    if LOCAL_MODE:
+        print("[Search] LOCAL MODE ACTIVE — returning mock data")
+        leads = _mock_leads(industry, location)
+        _last_fetch_stats["raw"]      = len(leads)
+        _last_fetch_stats["filtered"] = len(leads)
+        print(f"[Search] Retrieved {len(leads)} leads (mock)")
+        return leads
+
+    # ── STEP 1: Build queries ───────────────────────────────────────────────
+    queries = build_queries(industry, location)
+    print(f"\n[Search] ── Qualification pipeline ──")
+    print(f"[Search] Queries: {queries}")
+
+    # ── STEP 2: Fetch all queries in one Apify call ─────────────────────────
+    raw_items = _apify_fetch(queries, location)
+    print(f"[Search] Total fetched:    {len(raw_items)}")
+
+    # ── STEP 3: Normalise + Deduplicate ────────────────────────────────────
+    normalised = [
         _normalize(item)
-        for item in items
+        for item in raw_items
         if item.get("title")
     ]
+    unique = deduplicate(normalised)
+    print(f"[Search] After dedupe:     {len(unique)}")
 
-    # Light filter only: dedupe + remove empty (NO location filter)
-    filtered = light_filter(leads)
-    top      = filtered[:MAX_PLACES]
+    # ── STEP 4: Relevance filter ────────────────────────────────────────────
+    filtered = [p for p in unique if is_relevant(p, industry)]
+    print(f"[Search] After filter:     {len(filtered)}")
 
-    _last_fetch_stats["raw"]      = len(leads)
-    _last_fetch_stats["filtered"] = len(top)
+    # Fallback: relevance filter too aggressive → use top-rated deduped results
+    # Require rating >= 4.0 to avoid ghost/closed businesses in fallback.
+    if len(filtered) < 5:
+        fallback_pool = [p for p in unique if float(p.get("rating") or 0) >= 4.0]
+        fallback_n    = min(15, len(fallback_pool))
+        print(f"[Search] ⚠  Relevance filter < 5 — fallback: top {fallback_n} rated >=4.0")
+        filtered = sorted(fallback_pool, key=lambda x: float(x.get("rating") or 0), reverse=True)[:fallback_n]
+        if not filtered:
+            # Last resort: no rating gate if pool is completely empty
+            print("[Search] ⚠  No rated fallback found — using all deduped results")
+            filtered = sorted(unique, key=lambda x: float(x.get("rating") or 0), reverse=True)[:15]
 
-    print(f"[Pipeline] Raw leads: {len(leads)}")
-    print(f"[Pipeline] Returned leads: {len(top)}")
-    print(f"[Fetcher] Retrieved {len(top)} leads from Apify (raw: {len(leads)}, after dedupe: {len(top)})")
+    # ── STEP 5: Score + debug field ────────────────────────────────────────
+    keywords = _lookup_keywords(industry)
+    for p in filtered:
+        qs    = _relevance_score(p, industry, location)
+        conf  = _relevance_confidence(p, keywords) if keywords else 0
+        matched = _get_matched_keywords(p, keywords) if keywords else []
+        p["_relevance"] = qs
+        p["_debug"] = {
+            "confidence":       conf,
+            "quality_score":    qs,
+            "matched_keywords": matched,
+        }
 
-    # Cache raw (pre-dedupe) leads
-    _save_cache(search_query, leads)
+    # ── STEP 6: Hard quality cutoff — discard weak leads ──────────────────
+    # Minimum quality score of 2 keeps legit businesses that just lack a website
+    # (our primary target!) while still cutting ghosts / unrated / off-location.
+    # e.g. rating 4.3 + 18 reviews + no website → score 1+0+2 = 3 → passes.
+    QUALITY_CUTOFF = 2
+    before_cutoff = len(filtered)
+    filtered = [p for p in filtered if p.get("_relevance", 0) >= QUALITY_CUTOFF]
+    print(f"[Search] After cutoff ≥{QUALITY_CUTOFF}: {len(filtered)}  (dropped {before_cutoff - len(filtered)})")
 
-    return top
+    # Safety net: if cutoff drops everything, keep the top 5 scored regardless
+    if not filtered and before_cutoff > 0:
+        all_scored = sorted(
+            [p for p in unique],
+            key=lambda x: x.get("_relevance", _relevance_score(x, industry, location)),
+            reverse=True,
+        )
+        filtered = all_scored[:5]
+        print(f"[Search] ⚠  Cutoff wiped all leads — keeping top 5 as safety net")
+
+    filtered.sort(key=lambda x: x.get("_relevance", 0), reverse=True)
+
+    top_leads = filtered[:MAX_PLACES]
+    print(f"[Search] Final returned:   {len(top_leads)}")
+
+    # ── Update side-channel stats for pipeline.py ──────────────────────────
+    _last_fetch_stats["raw"]      = len(normalised)
+    _last_fetch_stats["filtered"] = len(top_leads)
+
+    # Cache normalised (pre-dedup) results for transformer enrichment
+    cache_key = f"{industry} in {location}"
+    _save_cache(cache_key, normalised)
+
+    return top_leads

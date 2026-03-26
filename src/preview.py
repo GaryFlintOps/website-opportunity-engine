@@ -26,6 +26,10 @@ def get_tagline(industry: str) -> str:
 INDUSTRY_SERVICES: dict[str, list[str]] = {
     "coffee":      ["Espresso & Pour Over", "Cold Brew & Iced Drinks", "Pastries & Light Bites", "Private Events"],
     "cafe":        ["Specialty Coffee", "Fresh Pastries", "Light Lunch Menu", "Takeaway & Delivery"],
+    "bike":        ["Bike sales", "Servicing", "Repairs", "Accessories"],
+    "bicycle":     ["Bike sales", "Servicing", "Repairs", "Accessories"],
+    "cycle":       ["Bike sales", "Servicing", "Repairs", "Accessories"],
+    "charcuterie": ["Artisan cheeses", "Baked goods", "Coffee", "Freshly squeezed juices"],
     "salon":       ["Haircut & Styling", "Colour & Highlights", "Keratin Treatments", "Bridal Packages"],
     "barbershop":  ["Classic Haircuts", "Beard Trimming & Shaping", "Hot Towel Shave", "Kids Cuts"],
     "barber":      ["Classic Haircuts", "Beard Trimming & Shaping", "Hot Towel Shave", "Kids Cuts"],

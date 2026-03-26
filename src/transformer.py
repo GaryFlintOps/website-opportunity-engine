@@ -107,48 +107,88 @@ _FALLBACK_IMAGES: dict[str, list[str]] = {
         "https://images.unsplash.com/photo-1509042239860-f550ce710b93?w=800&h=600&fit=crop",
         "https://images.unsplash.com/photo-1521017432531-fbd92d768814?w=800&h=600&fit=crop",
         "https://images.unsplash.com/photo-1442512595331-e89e73853f31?w=800&h=600&fit=crop",
+        "https://images.unsplash.com/photo-1461023058943-07fcbe16d735?w=800&h=600&fit=crop",
+        "https://images.unsplash.com/photo-1511920170033-f8396924c348?w=800&h=600&fit=crop",
     ],
     "cafe":       [
         "https://images.unsplash.com/photo-1554118811-1e0d58224f24?w=1200&h=800&fit=crop",
         "https://images.unsplash.com/photo-1445116572660-236099ec97a0?w=800&h=600&fit=crop",
         "https://images.unsplash.com/photo-1453614512568-c4024d13c247?w=800&h=600&fit=crop",
         "https://images.unsplash.com/photo-1507914372368-b2b085b925a1?w=800&h=600&fit=crop",
+        "https://images.unsplash.com/photo-1461023058943-07fcbe16d735?w=800&h=600&fit=crop",
+        "https://images.unsplash.com/photo-1511920170033-f8396924c348?w=800&h=600&fit=crop",
+    ],
+    "bike":       [
+        "https://images.unsplash.com/photo-1485965120184-e220f721d03e?w=1200&h=800&fit=crop",
+        "https://images.unsplash.com/photo-1576435728678-68d0fbf94e91?w=800&h=600&fit=crop",
+        "https://images.unsplash.com/photo-1571068316344-75bc76f77890?w=800&h=600&fit=crop",
+        "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=800&h=600&fit=crop",
+        "https://images.unsplash.com/photo-1532298229144-0ec0c57515c7?w=800&h=600&fit=crop",
+        "https://images.unsplash.com/photo-1604176354204-9268737828e4?w=800&h=600&fit=crop",
+    ],
+    "cycle":      [
+        "https://images.unsplash.com/photo-1485965120184-e220f721d03e?w=1200&h=800&fit=crop",
+        "https://images.unsplash.com/photo-1576435728678-68d0fbf94e91?w=800&h=600&fit=crop",
+        "https://images.unsplash.com/photo-1571068316344-75bc76f77890?w=800&h=600&fit=crop",
+        "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=800&h=600&fit=crop",
+        "https://images.unsplash.com/photo-1532298229144-0ec0c57515c7?w=800&h=600&fit=crop",
+        "https://images.unsplash.com/photo-1604176354204-9268737828e4?w=800&h=600&fit=crop",
     ],
     "restaurant": [
         "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=1200&h=800&fit=crop",
         "https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=800&h=600&fit=crop",
         "https://images.unsplash.com/photo-1424847651672-bf20a4b0982b?w=800&h=600&fit=crop",
         "https://images.unsplash.com/photo-1466978913421-dad2ebd01d17?w=800&h=600&fit=crop",
+        "https://images.unsplash.com/photo-1552566626-52f8b828add9?w=800&h=600&fit=crop",
+        "https://images.unsplash.com/photo-1540189549336-e6e99c3679fe?w=800&h=600&fit=crop",
     ],
     "salon":      [
         "https://images.unsplash.com/photo-1560869713-7d0a29430803?w=1200&h=800&fit=crop",
         "https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?w=800&h=600&fit=crop",
         "https://images.unsplash.com/photo-1595476108010-b4d1f102b1b1?w=800&h=600&fit=crop",
         "https://images.unsplash.com/photo-1521590832167-7bcbfaa6381f?w=800&h=600&fit=crop",
+        "https://images.unsplash.com/photo-1562322140-8baeececf3df?w=800&h=600&fit=crop",
+        "https://images.unsplash.com/photo-1493256338651-d82f7acb2b38?w=800&h=600&fit=crop",
     ],
     "barber":     [
         "https://images.unsplash.com/photo-1503951914875-452162b0f3f1?w=1200&h=800&fit=crop",
         "https://images.unsplash.com/photo-1599351431202-1e0f0137899a?w=800&h=600&fit=crop",
         "https://images.unsplash.com/photo-1621605815971-fbc98d665033?w=800&h=600&fit=crop",
         "https://images.unsplash.com/photo-1585747860715-2ba37e788b70?w=800&h=600&fit=crop",
+        "https://images.unsplash.com/photo-1622286342621-4bd786c2447c?w=800&h=600&fit=crop",
+        "https://images.unsplash.com/photo-1634302827935-9b3700a4b25e?w=800&h=600&fit=crop",
     ],
     "gym":        [
         "https://images.unsplash.com/photo-1534438327167-af6e4e82fc16?w=1200&h=800&fit=crop",
         "https://images.unsplash.com/photo-1517836357463-d25dfeac3438?w=800&h=600&fit=crop",
         "https://images.unsplash.com/photo-1571902943202-507ec2618e8f?w=800&h=600&fit=crop",
         "https://images.unsplash.com/photo-1490645935967-10de6ba17061?w=800&h=600&fit=crop",
+        "https://images.unsplash.com/photo-1583454110551-21f2fa2afe61?w=800&h=600&fit=crop",
+        "https://images.unsplash.com/photo-1549060279-7e168fcee0c2?w=800&h=600&fit=crop",
     ],
     "bakery":     [
         "https://images.unsplash.com/photo-1509440159596-0249088772ff?w=1200&h=800&fit=crop",
         "https://images.unsplash.com/photo-1550617931-e17a7b70dce2?w=800&h=600&fit=crop",
         "https://images.unsplash.com/photo-1568254183919-78a4f43a2877?w=800&h=600&fit=crop",
         "https://images.unsplash.com/photo-1486427944299-d1955d23e34d?w=800&h=600&fit=crop",
+        "https://images.unsplash.com/photo-1517433670267-08bbd4be890f?w=800&h=600&fit=crop",
+        "https://images.unsplash.com/photo-1584776831898-aeadbeef0ae1?w=800&h=600&fit=crop",
     ],
     "spa":        [
         "https://images.unsplash.com/photo-1540555700478-4be290d57689?w=1200&h=800&fit=crop",
         "https://images.unsplash.com/photo-1544161515-4ab6ce6db874?w=800&h=600&fit=crop",
         "https://images.unsplash.com/photo-1600334089648-b0d9d3028eb2?w=800&h=600&fit=crop",
         "https://images.unsplash.com/photo-1596178065887-1198b6148b2b?w=800&h=600&fit=crop",
+        "https://images.unsplash.com/photo-1515377905703-c4788e51af15?w=800&h=600&fit=crop",
+        "https://images.unsplash.com/photo-1629026041977-f62b53f3cca9?w=800&h=600&fit=crop",
+    ],
+    "charcuterie": [
+        "https://images.unsplash.com/photo-1555507036-ab1f4038808a?w=1200&h=800&fit=crop",
+        "https://images.unsplash.com/photo-1509440159596-0249088772ff?w=800&h=600&fit=crop",
+        "https://images.unsplash.com/photo-1452195100486-9cc805987862?w=800&h=600&fit=crop",
+        "https://images.unsplash.com/photo-1548940740-204726a19be3?w=800&h=600&fit=crop",
+        "https://images.unsplash.com/photo-1560717845-968823efbee1?w=800&h=600&fit=crop",
+        "https://images.unsplash.com/photo-1471943311424-646960669fbc?w=800&h=600&fit=crop",
     ],
 }
 
@@ -386,25 +426,36 @@ def build_business_data(lead: dict, industry: str) -> dict:
         cached = _lookup_cache(name)
 
     # ── IMAGES ──────────────────────────────────────────────────────────────
-    # Priority 1: real Google Maps photos from lead or cache
-    # Priority 2 (hero only): curated Unsplash fallback so hero is never blank
+    # Priority 1: real Google Maps photos from lead or cache.
+    # Priority 2: curated Unsplash fallbacks so the page is NEVER empty.
     #
-    # CRITICAL: gallery_images contains ONLY real photos.
-    # No fallback padding — we never show a gallery of stock images.
+    # Rule:
+    #   ≥3 real photos → use real photos for gallery (pad to 6 with fallbacks if needed)
+    #   <3 real photos → use all 6 fallback images for gallery
+    #   hero_image     → always real if available, otherwise first fallback
     photos = lead.get("photos") or (cached.get("photos") if cached else None) or []
 
-    fallbacks  = _get_fallback_images(industry)
+    fallbacks  = _get_fallback_images(category or industry)
     has_photos = bool(photos)            # True only when real Google photos exist
 
     if photos:
-        hero_image     = photos[0]
-        gallery_images = list(photos[:6])    # best photos first (Google sorts by quality)
+        hero_image = photos[0]
     else:
-        hero_image     = ""                  # no real photo → CSS brand-colour background
-        gallery_images = []                  # no gallery without real photos
+        hero_image = fallbacks[0]        # never leave hero blank
 
-    # show_gallery: needs ≥3 real photos to be worth displaying as a grid
-    show_gallery = len(gallery_images) >= 3
+    if len(photos) >= 3:
+        # Use real photos first; pad up to 6 with fallbacks if real set is short
+        real_gallery = list(photos[:6])
+        if len(real_gallery) < 6:
+            needed = 6 - len(real_gallery)
+            real_gallery += fallbacks[:needed]
+        gallery_images = real_gallery
+    else:
+        # Not enough real photos — use full fallback set (6 images)
+        gallery_images = fallbacks[:6]
+
+    # show_gallery: always True — we always have at least 6 images available
+    show_gallery = True
 
     # ── REVIEWS ─────────────────────────────────────────────────────────────
     # Only use real review objects. No fabrication.
@@ -435,8 +486,21 @@ def build_business_data(lead: dict, industry: str) -> dict:
     # ── REVIEW INTELLIGENCE ──────────────────────────────────────────────────
     review_intel = extract_review_intel(reviews)
 
-    # Signal-based extraction from real review text (no fabrication)
+    # Signal-based extraction from real review text
     review_phrases   = extract_review_phrases(reviews)           # punchy opening sentences
+    # Fallback phrases when no real review text is extractable
+    if not review_phrases:
+        _cat = (category or industry).lower()
+        if any(k in _cat for k in ["bike", "cycle", "bicycle"]):
+            review_phrases = ["Trusted local bike specialists", "The go-to shop for cyclists in the area"]
+        elif any(k in _cat for k in ["cafe", "coffee"]):
+            review_phrases = ["Highly rated local cafe", "Trusted by customers in the area"]
+        elif any(k in _cat for k in ["restaurant", "dining", "food"]):
+            review_phrases = ["Highly rated local restaurant", "Trusted by the local community"]
+        elif any(k in _cat for k in ["guest", "lodge", "hotel", "bnb", "accommodation"]):
+            review_phrases = ["Highly rated local accommodation", "Trusted by guests in the area"]
+        else:
+            review_phrases = ["Highly rated local business", "Trusted by customers in the area"]
     _love_signal     = extract_what_people_love(reviews)         # keyword-matched phrases
 
     # Fallback to frequency-based extraction if signal extraction yields < 2 items
@@ -503,7 +567,7 @@ def build_business_data(lead: dict, industry: str) -> dict:
         cta_line = ""
         ai_trust = ""
 
-    # Rating badge — surfaced visually in hero section
+    # Rating badge — always rendered when a rating exists
     try:
         _score = float(rating) if rating else 0.0
     except (TypeError, ValueError):
@@ -560,6 +624,29 @@ def build_business_data(lead: dict, industry: str) -> dict:
     feature_pills  = _resolve(INDUSTRY_FEATURE_PILLS,  DEFAULT_FEATURE_PILLS,  category, industry)
     cta_label      = _resolve(INDUSTRY_CTA_LABEL,      DEFAULT_CTA_LABEL,      category, industry)
     about_text     = _build_about_text(name, city, category, industry, rating, reviews_count)
+
+    # ── MINIMUM PAGE GUARANTEE ───────────────────────────────────────────────
+    # Ensure the 4 critical sections always have renderable content.
+    # This prevents a blank page when data is thin.
+    _critical_sections = {
+        "hero":      bool(name),
+        "images":    bool(gallery_images),
+        "offerings": bool(services),
+        "rating":    bool(rating),
+    }
+    _failing = [k for k, v in _critical_sections.items() if not v]
+    if _failing:
+        print(f"[Transformer] ⚠ Forcing fallbacks for: {_failing}")
+    # Force-fill any missing critical sections
+    if not gallery_images:
+        gallery_images = _get_fallback_images(category or industry)[:6]
+        show_gallery   = True
+    if not services:
+        services = get_services(category or industry)
+    if not rating:
+        rating = 0.0    # template hides rating block when value is 0
+    if not name:
+        name = "Local Business"
 
     return {
         # Core identity

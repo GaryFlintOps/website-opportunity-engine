@@ -577,7 +577,220 @@ def _mock_leads(industry: str, location: str) -> list[dict]:
     return leads
 
 
-# ── Apify HTTP call (single run, multiple search strings) ────────────────────
+# ── Outscraper normalizer ─────────────────────────────────────────────────────
+
+def _normalize_outscraper(item: dict) -> dict:
+    """
+    Convert a raw Outscraper Google Maps item into the same clean lead dict
+    format produced by _normalize() for Apify.  All downstream pipeline code
+    (dedup, is_relevant, scoring, transformer, dashboard) stays untouched.
+    """
+    # Photos — Outscraper nests them under photos_data or as a flat list
+    photos: list[str] = []
+    for key in ("photos_data", "photos", "photo"):
+        raw_photos = item.get(key) or []
+        if not isinstance(raw_photos, list):
+            continue
+        for entry in raw_photos:
+            if isinstance(entry, str) and entry.startswith("http"):
+                photos.append(entry)
+            elif isinstance(entry, dict):
+                img_url = (
+                    entry.get("photo_url")
+                    or entry.get("url")
+                    or entry.get("src")
+                    or ""
+                )
+                if img_url.startswith("http"):
+                    photos.append(img_url)
+        if photos:
+            break
+    photos = photos[:MAX_IMAGES]
+
+    # Reviews — Outscraper puts full review objects in reviews_data
+    reviews: list[dict] = []
+    for r in (item.get("reviews_data") or [])[:MAX_REVIEWS]:
+        text = (r.get("review_text") or r.get("text") or "").strip()
+        if not text:
+            continue
+        reviews.append({
+            "text":   text[:400],
+            "author": (
+                r.get("author_title") or r.get("name") or "Verified Customer"
+            ).strip(),
+            "rating": _safe_int(
+                r.get("review_rating") or r.get("stars") or r.get("rating"),
+                default=5,
+            ),
+        })
+
+    # Category — can be a string or list of subtypes
+    category_raw = item.get("type") or item.get("subtypes") or item.get("category") or ""
+    if isinstance(category_raw, list):
+        category = ", ".join(str(c) for c in category_raw if c)
+    else:
+        category = str(category_raw).strip()
+
+    name     = (item.get("name")     or "Unknown").strip()
+    address  = (item.get("full_address") or item.get("address") or "").strip()
+    city     = (item.get("city")     or "").strip()
+    phone    = (item.get("phone")    or item.get("phone_international") or "").strip()
+    website  = (item.get("site")     or item.get("website") or "").strip()
+    rating   = _safe_float(item.get("rating") or item.get("stars"))
+    rev_cnt  = _safe_int(item.get("reviews") or item.get("reviews_count"))
+    maps_url = (item.get("url")      or item.get("google_maps_url") or "").strip()
+    place_id = (item.get("place_id") or "").strip()
+    lat      = str(item.get("latitude")  or item.get("lat") or "")
+    lng      = str(item.get("longitude") or item.get("lng") or "")
+
+    return {
+        "name":               name,
+        "city":               city,
+        "address":            address,
+        "phone":              phone,
+        "website":            website,
+        "rating":             rating,
+        "reviews_count":      rev_cnt,
+        "category":           category,
+        "google_maps_url":    maps_url,
+        "maps_url":           maps_url,
+        "place_id":           place_id,
+        "lat":                lat,
+        "lng":                lng,
+        "photos":             photos,
+        "reviews":            reviews,
+        "reviews_text":       [r["text"] for r in reviews],
+        "has_whatsapp":       False,
+        "whatsapp_confidence": 0,
+    }
+
+
+# ── Outscraper polling (handles async task responses) ─────────────────────────
+
+def _outscraper_poll(task_id: str, api_key: str, max_wait: int = 240) -> dict:
+    """
+    Poll Outscraper for a pending task until status == success/failed or
+    max_wait seconds elapse.  Backs off gradually (5s → 10s → 20s → 30s).
+    """
+    url     = f"https://api.app.outscraper.com/requests/{task_id}"
+    headers = {"X-API-KEY": api_key}
+    deadline = time.time() + max_wait
+    interval = 5.0
+
+    print(f"[Search] Outscraper async task {task_id} — polling (max {max_wait}s)...")
+    while time.time() < deadline:
+        time.sleep(interval)
+        try:
+            resp = requests.get(url, headers=headers, timeout=30)
+        except requests.exceptions.RequestException as e:
+            print(f"[Search] Poll error: {e} — retrying")
+            continue
+
+        if resp.status_code != 200:
+            print(f"[Search] Poll HTTP {resp.status_code} — retrying")
+            continue
+
+        data   = resp.json()
+        status = (data.get("status") or "").lower()
+        print(f"[Search] Outscraper status: {status}")
+
+        if status in ("success", "completed", "done"):
+            return data
+        if status in ("failed", "error"):
+            raise Exception(f"Outscraper task {task_id} failed: {data}")
+
+        interval = min(interval * 1.5, 30.0)     # back off, cap at 30s
+
+    raise Exception(
+        f"Outscraper task {task_id} did not complete within {max_wait}s."
+    )
+
+
+# ── Outscraper HTTP call ───────────────────────────────────────────────────────
+
+def _outscraper_fetch(queries: list[str], location: str) -> list[dict]:
+    """
+    Execute a Google Maps search via Outscraper.
+    Accepts the same query list built by build_queries() so location expansion
+    continues to work unchanged.  Returns raw Outscraper items (un-normalised).
+
+    Handles both synchronous (immediate data) and asynchronous (task-ID)
+    responses automatically.
+    """
+    api_key = os.getenv("OUTSCRAPER_API_KEY")
+    if not api_key:
+        raise Exception(
+            "OUTSCRAPER_API_KEY not set — cannot run live search. "
+            "Add it to your .env or Render environment variables."
+        )
+
+    # Pass query list directly; Outscraper accepts arrays in `query`.
+    # radius=50000 (50 km) gives geographic proximity even when individual
+    # query strings omit the city name.
+    payload = {
+        "query":    queries,      # list of search strings from build_queries()
+        "limit":    20,           # max results per query string
+        "language": "en",
+        "region":   _guess_region_code(location) or "ZA",
+    }
+
+    headers = {
+        "X-API-KEY":    api_key,
+        "Content-Type": "application/json",
+    }
+
+    print(f"[Search] POST https://api.app.outscraper.com/maps/search-v3")
+    print(f"[Search] Waiting for Outscraper ({len(queries)} queries, limit 20 each)...")
+
+    t0 = time.time()
+    try:
+        resp = requests.post(
+            "https://api.app.outscraper.com/maps/search-v3",
+            json=payload,
+            headers=headers,
+            timeout=SYNC_TIMEOUT,
+        )
+    except requests.exceptions.Timeout:
+        raise Exception(f"Outscraper timed out after {SYNC_TIMEOUT}s.")
+    except requests.exceptions.RequestException as e:
+        raise Exception(f"Outscraper HTTP error: {e}")
+
+    print(f"[Search] Outscraper HTTP {resp.status_code}  ({time.time() - t0:.1f}s)")
+
+    if resp.status_code not in (200, 201, 202):
+        raise Exception(
+            f"Outscraper returned HTTP {resp.status_code}: {resp.text[:300]}"
+        )
+
+    data = resp.json()
+
+    # Async path: Outscraper returned a task ID instead of immediate results
+    task_id = data.get("id")
+    status  = (data.get("status") or "").lower()
+    if task_id and status in ("pending", "running", "in_progress", ""):
+        data = _outscraper_poll(task_id, api_key)
+
+    print(f"[Search] Outscraper completed in {time.time() - t0:.1f}s")
+
+    # Flatten: results may be a list-of-lists (one list per query string)
+    # or a flat list — handle both.
+    raw = data.get("data", [])
+    if raw and isinstance(raw[0], list):
+        flat: list[dict] = []
+        for group in raw:
+            flat.extend(group)
+        raw = flat
+
+    if not raw:
+        raise Exception(
+            f"Outscraper returned no data for queries {queries}. "
+            "Check your API key, quota, and search terms."
+        )
+
+    return raw
+
+
+# ── Apify HTTP call (kept for reference / fallback — not called by default) ───
 
 def _apify_fetch(queries: list[str], location: str) -> list[dict]:
     """
@@ -687,26 +900,28 @@ def fetch_leads(industry: str, location: str) -> list[dict]:
     print(f"[Search] Total queries:      {len(queries)}")
     print(f"[Search] Queries: {queries}")
 
-    # ── STEP 2: Fetch all queries in one Apify call ─────────────────────────
-    # Timeout fallback: if the full query set times out, retry with a trimmed
-    # set (first 8 queries) so the user always gets some results.
+    # ── STEP 2: Fetch all queries via Outscraper ────────────────────────────
+    # Timeout fallback: if the full set times out, retry with the first 8
+    # queries (covers the primary location) so users always get some results.
     FALLBACK_QUERY_LIMIT = 8
     try:
-        raw_items = _apify_fetch(queries, location)
+        raw_items = _outscraper_fetch(queries, location)
     except Exception as e:
         if "timed out" in str(e).lower() and len(queries) > FALLBACK_QUERY_LIMIT:
             trimmed = queries[:FALLBACK_QUERY_LIMIT]
             print(f"[Search] ⚠  Timeout — retrying with {len(trimmed)} queries (trimmed from {len(queries)})")
-            raw_items = _apify_fetch(trimmed, location)
+            raw_items = _outscraper_fetch(trimmed, location)
         else:
             raise
     print(f"[Search] Total fetched:    {len(raw_items)}")
 
     # ── STEP 3: Normalise + Deduplicate ────────────────────────────────────
+    # _normalize_outscraper maps Outscraper fields → the same dict shape that
+    # _normalize() produced for Apify.  All downstream code is unchanged.
     normalised = [
-        _normalize(item)
+        _normalize_outscraper(item)
         for item in raw_items
-        if item.get("title")
+        if item.get("name")     # Outscraper uses "name", Apify used "title"
     ]
     unique = deduplicate(normalised)
     print(f"[Search] After dedupe:     {len(unique)}")

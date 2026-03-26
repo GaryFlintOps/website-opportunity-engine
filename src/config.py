@@ -3,11 +3,14 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-APIFY_API_TOKEN = os.getenv("APIFY_API_TOKEN")
-if not APIFY_API_TOKEN:
-    print("⚠  APIFY_API_TOKEN not set — search will be disabled. Dashboard works with existing data.")
+# ── Data source: Outscraper (primary) ─────────────────────────────────────────
+OUTSCRAPER_API_KEY = os.getenv("OUTSCRAPER_API_KEY")
+if not OUTSCRAPER_API_KEY:
+    print("⚠  OUTSCRAPER_API_KEY not set — search will be disabled. Dashboard works with existing data.")
 
-APIFY_ACTOR_ID = "compass/crawler-google-places"
+# ── Apify (kept for reference — no longer called by default) ──────────────────
+APIFY_API_TOKEN = os.getenv("APIFY_API_TOKEN")
+APIFY_ACTOR_ID  = "compass/crawler-google-places"
 
 MAX_RESULTS = 40
 

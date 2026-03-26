@@ -153,6 +153,71 @@ BAD_BUSINESS_TYPES: list[str] = [
 ]
 
 
+# ── Location expansion ────────────────────────────────────────────────────────
+# Maps small/low-density towns → a list of nearby areas to search in addition.
+# All expansions stay within a practical driving radius (~30–60 km).
+# Extend this dict as new markets are added — no other code changes needed.
+
+_NEARBY: dict[str, list[str]] = {
+    # KZN Midlands cluster
+    "hilton":             ["Hilton", "Pietermaritzburg", "Howick", "Midlands"],
+    "howick":             ["Howick", "Hilton", "Pietermaritzburg", "Midlands"],
+    "midlands":           ["Midlands", "Howick", "Hilton", "Pietermaritzburg"],
+    "nottingham road":    ["Nottingham Road", "Howick", "Midlands"],
+    "mooi river":         ["Mooi River", "Midlands", "Howick"],
+    # KZN coastal / greater Durban
+    "ballito":            ["Ballito", "Salt Rock", "Umhlanga", "Dolphin Coast"],
+    "salt rock":          ["Salt Rock", "Ballito", "Dolphin Coast"],
+    "umhlanga":           ["Umhlanga", "La Lucia", "Ballito"],
+    "westville":          ["Westville", "Pinetown", "Durban North"],
+    "pinetown":           ["Pinetown", "Westville", "Kloof"],
+    "kloof":              ["Kloof", "Hillcrest", "Pinetown"],
+    "hillcrest":          ["Hillcrest", "Kloof", "Waterfall"],
+    # Western Cape
+    "franschhoek":        ["Franschhoek", "Stellenbosch", "Paarl"],
+    "stellenbosch":       ["Stellenbosch", "Franschhoek", "Paarl", "Somerset West"],
+    "hermanus":           ["Hermanus", "Stanford", "Gansbaai", "Overberg"],
+    "knysna":             ["Knysna", "Wilderness", "Plettenberg Bay"],
+    "plettenberg bay":    ["Plettenberg Bay", "Knysna", "Plett"],
+    "wilderness":         ["Wilderness", "Knysna", "George"],
+    # Gauteng / Joburg surrounds
+    "fourways":           ["Fourways", "Sandton", "Randburg"],
+    "midrand":            ["Midrand", "Halfway House", "Fourways", "Centurion"],
+    "centurion":          ["Centurion", "Midrand", "Pretoria"],
+    "bedfordview":        ["Bedfordview", "Edenvale", "Germiston"],
+    # Eastern Cape / Garden Route
+    "grahamstown":        ["Grahamstown", "Makhanda", "Port Alfred"],
+    "makhanda":           ["Makhanda", "Grahamstown", "Port Alfred"],
+    # Small Limpopo / Mpumalanga
+    "white river":        ["White River", "Nelspruit", "Mbombela"],
+    "hazyview":           ["Hazyview", "White River", "Sabie"],
+    "sabie":              ["Sabie", "Hazyview", "Graskop", "Pilgrim's Rest"],
+}
+
+
+def expand_location(location: str) -> list[str]:
+    """
+    Expand a small/low-density location into a list of nearby search areas.
+
+    Returns the original location (always first) plus any configured nearby
+    towns so that multi-query Apify calls cast a wider net while staying local.
+    Falls back to [original] if no expansion is configured.
+
+    All expansions are kept LOCAL (practical driving radius, ~30–60 km).
+    Expansions are capped so total query count stays within limits.
+    """
+    raw = (location or "").strip()
+    key = raw.lower().replace(",", " ").strip()
+
+    # Check each known small-town key against the normalised input
+    for town_key, nearby in _NEARBY.items():
+        if town_key in key:
+            return nearby   # first element is the canonical form of the town
+
+    # No expansion configured → single-location search
+    return [raw]
+
+
 # ── Multi-query builder ────────────────────────────────────────────────────────
 
 def build_queries(industry: str, location: str) -> list[str]:
@@ -607,9 +672,18 @@ def fetch_leads(industry: str, location: str) -> list[dict]:
         print(f"[Search] Retrieved {len(leads)} leads (mock)")
         return leads
 
-    # ── STEP 1: Build queries ───────────────────────────────────────────────
-    queries = build_queries(industry, location)
+    # ── STEP 1: Expand location + build queries ─────────────────────────────
+    locations = expand_location(location)
+    queries: list[str] = []
+    for loc in locations:
+        queries.extend(build_queries(industry, loc))
+    # Deduplicate while preserving order (set() would scramble)
+    seen_q: set[str] = set()
+    queries = [q for q in queries if not (q in seen_q or seen_q.add(q))]  # type: ignore[func-returns-value]
+
     print(f"\n[Search] ── Qualification pipeline ──")
+    print(f"[Search] Expanded locations: {locations}")
+    print(f"[Search] Total queries:      {len(queries)}")
     print(f"[Search] Queries: {queries}")
 
     # ── STEP 2: Fetch all queries in one Apify call ─────────────────────────
@@ -679,8 +753,10 @@ def fetch_leads(industry: str, location: str) -> list[dict]:
     print(f"[Search] Final returned:   {len(top_leads)}")
 
     # ── Update side-channel stats for pipeline.py ──────────────────────────
-    _last_fetch_stats["raw"]      = len(normalised)
-    _last_fetch_stats["filtered"] = len(top_leads)
+    _last_fetch_stats["raw"]               = len(normalised)
+    _last_fetch_stats["filtered"]          = len(top_leads)
+    _last_fetch_stats["expanded_locations"] = locations
+    _last_fetch_stats["expanded"]          = len(locations) > 1
 
     # Cache normalised (pre-dedup) results for transformer enrichment
     cache_key = f"{industry} in {location}"

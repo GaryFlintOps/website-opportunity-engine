@@ -151,11 +151,13 @@ async def index(
     ephemeral_warning = bool(os.getenv("RENDER") and not os.getenv("PERSISTENT_DEMOS_DIR"))
 
     # ── Filter quality metrics ────────────────────────────────────────────
-    filter_stats   = load_latest_filter_stats()
-    raw_count      = filter_stats.get("raw", 0)
-    filtered_total = filter_stats.get("filtered", 0)
-    filter_pct     = round(filtered_total / raw_count * 100) if raw_count else None
-    low_confidence = bool(
+    filter_stats       = load_latest_filter_stats()
+    raw_count          = filter_stats.get("raw", 0)
+    filtered_total     = filter_stats.get("filtered", 0)
+    filter_pct         = round(filtered_total / raw_count * 100) if raw_count else None
+    expanded_search    = bool(filter_stats.get("expanded", False))
+    expanded_locations = filter_stats.get("expanded_locations", [])
+    low_confidence     = bool(
         filter_stats
         and (
             filtered_total < 5
@@ -183,7 +185,9 @@ async def index(
         "raw_count":         raw_count,
         "filtered_total":    filtered_total,
         "filter_pct":        filter_pct,
-        "low_confidence":    low_confidence,
+        "low_confidence":       low_confidence,
+        "expanded_search":      expanded_search,
+        "expanded_locations":   expanded_locations,
         "followup_count":    followup_count,
         "sent_today":        sent_today,
         "followups_due":     followups_due,

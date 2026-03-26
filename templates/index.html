@@ -422,12 +422,20 @@
         <div class="lowconf-banner">
             <span>⚠</span>
             <div>
-                <strong>Low-confidence results:</strong>
-                Only <strong>{{ filtered_total }}</strong> of <strong>{{ raw_count }}</strong>
-                raw results passed the location filter
-                ({{ filter_pct }}%).
-                The location query may be too broad or ambiguous — try a more specific
-                location (e.g. <em>"Hilton, KwaZulu-Natal"</em> instead of <em>"Hilton"</em>).
+                {% if expanded_search %}
+                    <strong>Low results for this location.</strong>
+                    Search automatically expanded to nearby areas
+                    {% if expanded_locations %}
+                        ({{ expanded_locations | join(", ") }})
+                    {% endif %}
+                    — showing the best leads found across the region.
+                {% else %}
+                    <strong>Low results returned.</strong>
+                    Only <strong>{{ filtered_total }}</strong> of <strong>{{ raw_count }}</strong>
+                    results passed relevance filters
+                    {% if filter_pct %}({{ filter_pct }}%){% endif %}.
+                    Try a nearby larger town or check your industry term.
+                {% endif %}
             </div>
         </div>
         {% endif %}

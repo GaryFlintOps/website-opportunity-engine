@@ -512,6 +512,10 @@ async def render_demo(request: Request, slug: str):
         "hero_quote":     hero_quote,
         # Client-facing highlights
         "what_people_love": data.get("what_people_love", []),
+        # Industry pack + pack-specific content
+        "industry_pack":    data.get("industry_pack", "default"),
+        "hero_description": data.get("hero_description", ""),
+        "show_gallery":     data.get("show_gallery", False),
         # Menu module
         "menu_enabled":   menu_enabled,
         "menu":           menu_data or {},

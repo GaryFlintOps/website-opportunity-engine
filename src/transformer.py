@@ -247,6 +247,41 @@ def _build_about_text(name: str, city: str, category: str, industry: str,
     return f"{s1} {s2}"
 
 
+# ── Industry Pack ─────────────────────────────────────────────────────────────
+
+def get_industry_pack(category: str) -> str:
+    """
+    Detect which content pack to apply.
+    Returns a string key used by the template and content builders.
+    Extendable: add more packs (dining, wellness, etc.) over time.
+    """
+    c = (category or "").lower()
+    if any(k in c for k in ["guest", "hotel", "bnb", "b&b", "lodge", "accommodation", "inn", "guesthouse"]):
+        return "accommodation"
+    return "default"
+
+
+def build_accommodation_hero(name: str, location: str, review_intel: dict) -> str:
+    """
+    Build a review-driven hero description for accommodation businesses.
+    Uses the top review highlights to make the line specific, not generic.
+    """
+    highlights = review_intel.get("top_highlights") or []
+    tags       = review_intel.get("experience_tags") or []
+
+    # Prefer the first two real highlights if available
+    combined = [h.lower() for h in (highlights + tags) if h]
+    if len(combined) >= 2:
+        theme = f"{combined[0]} and {combined[1]}"
+    elif len(combined) == 1:
+        theme = combined[0]
+    else:
+        theme = "comfortable stays and friendly hospitality"
+
+    loc = location or "the area"
+    return f"A well-rated guest house in {loc} known for {theme}."
+
+
 def build_business_data(lead: dict, industry: str) -> dict:
     """
     Assemble real business data for demo generation.
@@ -275,26 +310,28 @@ def build_business_data(lead: dict, industry: str) -> dict:
 
     # ── IMAGES ──────────────────────────────────────────────────────────────
     # Priority 1: real Google Maps photos from lead or cache
-    # Priority 2: curated category images (permanent Unsplash CDN URLs)
+    # Priority 2 (hero only): curated Unsplash fallback so hero is never blank
+    #
+    # CRITICAL: gallery_images contains ONLY real photos.
+    # No fallback padding — we never show a gallery of stock images.
     photos = lead.get("photos") or (cached.get("photos") if cached else None) or []
 
-    fallbacks = _get_fallback_images(industry)
+    fallbacks  = _get_fallback_images(industry)
+    has_photos = bool(photos)            # True only when real Google photos exist
+
     if photos:
         hero_image     = photos[0]
-        gallery_images = list(photos[1:7])
-        # Pad with fallbacks if fewer than 3 gallery tiles
-        for fb in fallbacks:
-            if len(gallery_images) >= 4:
-                break
-            if fb not in gallery_images:
-                gallery_images.append(fb)
+        gallery_images = list(photos[1:7])   # real photos only — no padding
     else:
-        hero_image     = fallbacks[0]
-        gallery_images = fallbacks[1:5]
+        hero_image     = fallbacks[0]        # single fallback for hero backdrop
+        gallery_images = []                  # no gallery without real photos
+
+    # show_gallery is the flag the template checks — never True without real photos
+    show_gallery = bool(gallery_images)
 
     # ── REVIEWS ─────────────────────────────────────────────────────────────
     # Only use real review objects. No fabrication.
-    # Sort by rating desc so best reviews surface first; show up to 5.
+    # Sort by rating desc so best reviews surface first; show MAX 3.
     raw_reviews = lead.get("reviews") or (cached.get("reviews") if cached else None) or []
     reviews_raw = sorted(
         raw_reviews,
@@ -310,16 +347,28 @@ def build_business_data(lead: dict, industry: str) -> dict:
                 "author": r.get("author") or "Verified Customer",
                 "rating": int(r.get("rating") or 5),
             })
-        if len(reviews) >= 5:
+        if len(reviews) >= 3:          # hard cap at 3 — focused, not exhaustive
             break
     # has_real_reviews is True only when at least 2 substantive reviews exist
     has_real_reviews = len(reviews) >= 2
+
+    # ── INDUSTRY PACK ────────────────────────────────────────────────────────
+    industry_pack = get_industry_pack(category) if category else get_industry_pack(industry)
 
     # ── REVIEW INTELLIGENCE ──────────────────────────────────────────────────
     # Pure frequency-based extraction — no API, no fabrication.
     # Extracts highlights, signature items, and experience tags from real text.
     review_intel = extract_review_intel(reviews)
     what_people_love = _build_what_people_love(review_intel, category, industry)
+
+    # ── HERO DESCRIPTION (pack-specific) ─────────────────────────────────────
+    # Accommodation: review-driven one-liner using real highlights.
+    # Other packs: None — template falls back to tagline.
+    if industry_pack == "accommodation":
+        loc_str = city or industry
+        hero_description = build_accommodation_hero(name, loc_str, review_intel)
+    else:
+        hero_description = ""
 
     # ── MAP EMBED ────────────────────────────────────────────────────────────
     # Use coords if available, otherwise fall back to address search
@@ -440,10 +489,11 @@ def build_business_data(lead: dict, industry: str) -> dict:
         "category":       category,
         "google_maps_url": google_maps_url,
         "place_id":       place_id,
-        # Images (real first, Unsplash fallback)
+        # Images (real first, Unsplash fallback for hero only)
         "hero_image":     hero_image,
         "gallery_images": gallery_images,
-        "has_real_photos": len(lead.get("photos", [])) > 0,
+        "has_real_photos": has_photos,
+        "show_gallery":   show_gallery,    # True only when real gallery photos exist
         # Reviews (real only; requires >= 2 substantive reviews)
         "reviews":        reviews,
         "has_real_reviews": has_real_reviews,
@@ -469,7 +519,10 @@ def build_business_data(lead: dict, industry: str) -> dict:
         "review_intel":   review_intel,
         # Condensed highlights for client-facing demo
         "what_people_love": what_people_love,
-        "about_headline": about_headline,
+        "about_headline":   about_headline,
+        # Industry pack + pack-specific content
+        "industry_pack":     industry_pack,
+        "hero_description":  hero_description,
         # Diagnostic / opportunity intelligence
         "has_website":        has_website,
         "website_url":        website_url,

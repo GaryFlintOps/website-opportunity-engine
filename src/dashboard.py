@@ -516,6 +516,9 @@ async def render_demo(request: Request, slug: str):
         "industry_pack":    data.get("industry_pack", "default"),
         "hero_description": data.get("hero_description", ""),
         "show_gallery":     data.get("show_gallery", False),
+        # Signal-based fields (real review text extraction)
+        "hero_line":        data.get("hero_line") or data.get("hero_description", ""),
+        "review_phrases":   data.get("review_phrases", []),
         # Menu module
         "menu_enabled":   menu_enabled,
         "menu":           menu_data or {},

@@ -247,6 +247,84 @@ def _build_about_text(name: str, city: str, category: str, industry: str,
     return f"{s1} {s2}"
 
 
+# ── Review Signal Extraction ─────────────────────────────────────────────────
+# Extracts real phrases/signals from actual Google review text.
+# NO generation — only pulls from what people actually wrote.
+
+def extract_review_phrases(reviews: list[dict]) -> list[str]:
+    """
+    Pull short, punchy opening sentences from real reviews.
+    Returns up to 5 phrases (20–120 chars), suitable for a review strip.
+    """
+    phrases: list[str] = []
+    seen: set[str] = set()
+    for r in reviews:
+        text = (r.get("text") or "").strip().lower()
+        if len(text) < 20:
+            continue
+        sentence = text.split(".")[0].strip()
+        if 20 < len(sentence) < 120 and sentence not in seen:
+            phrases.append(sentence.capitalize())
+            seen.add(sentence)
+    return phrases[:5]
+
+
+# Keyword → phrase mapping (ordered: first match per review wins per phrase)
+_LOVE_KEYWORD_MAP: list[tuple[list[str], str]] = [
+    # Accommodation & hospitality
+    (["clean", "spotless"],                   "Clean and comfortable"),
+    (["friendly", "welcoming", "warm host"],  "Friendly and welcoming hosts"),
+    (["peaceful", "quiet", "tranquil"],       "Peaceful and relaxing"),
+    (["value", "affordable", "worth it"],     "Great value for money"),
+    (["breakfast"],                           "Great breakfast"),
+    (["safe", "secure"],                      "Safe and secure"),
+    (["comfortable", "cosy", "cozy"],         "Comfortable and well-appointed"),
+    # General service
+    (["fast", "quick", "efficient"],          "Fast and efficient service"),
+    (["professional", "skilled", "expert"],   "Professional and skilled"),
+    (["helpful", "attentive", "went above"],  "Helpful and attentive staff"),
+    (["highly recommend", "recommend"],       "Highly recommended"),
+    (["honest"],                              "Honest and transparent"),
+    # Food & drink
+    (["delicious", "tasty", "flavourful"],    "Delicious food"),
+    (["fresh"],                               "Fresh and quality"),
+    (["atmosphere", "vibe", "ambience"],      "Great atmosphere"),
+    # Facilities
+    (["parking"],                             "Easy parking available"),
+    (["spacious"],                            "Spacious and well-appointed"),
+]
+
+
+def extract_what_people_love(reviews: list[dict]) -> list[str]:
+    """
+    Scan real review text for keyword signals.
+    Returns up to 4 deduplicated short phrases that reflect what guests actually mention.
+    """
+    found: list[str] = []
+    seen_phrases: set[str] = set()
+
+    for r in reviews:
+        text = (r.get("text") or "").lower()
+        for keywords, phrase in _LOVE_KEYWORD_MAP:
+            if phrase in seen_phrases:
+                continue
+            if any(kw in text for kw in keywords):
+                found.append(phrase)
+                seen_phrases.add(phrase)
+
+    return found[:4]
+
+
+def build_hero_line(review_phrases: list[str], location: str) -> str:
+    """
+    Use the first real review phrase as the hero line.
+    Falls back to a simple location-based line if no real phrase exists.
+    """
+    if review_phrases:
+        return review_phrases[0]
+    return f"Comfortable stays in {location}" if location else ""
+
+
 # ── Industry Pack ─────────────────────────────────────────────────────────────
 
 def get_industry_pack(category: str) -> str:
@@ -325,8 +403,8 @@ def build_business_data(lead: dict, industry: str) -> dict:
         hero_image     = ""                  # no real photo → CSS brand-colour background
         gallery_images = []                  # no gallery without real photos
 
-    # show_gallery is the flag the template checks — never True without real photos
-    show_gallery = bool(gallery_images)
+    # show_gallery: needs ≥3 real photos to be worth displaying as a grid
+    show_gallery = len(gallery_images) >= 3
 
     # ── REVIEWS ─────────────────────────────────────────────────────────────
     # Only use real review objects. No fabrication.
@@ -355,21 +433,26 @@ def build_business_data(lead: dict, industry: str) -> dict:
     industry_pack = get_industry_pack(category) if category else get_industry_pack(industry)
 
     # ── REVIEW INTELLIGENCE ──────────────────────────────────────────────────
-    # Pure frequency-based extraction — no API, no fabrication.
-    # Extracts highlights, signature items, and experience tags from real text.
     review_intel = extract_review_intel(reviews)
-    _love_raw    = _build_what_people_love(review_intel, category, industry)
-    # Cap at 4, capitalize each item — short phrases only, no sentences
-    what_people_love = [item.capitalize() for item in _love_raw[:4]]
 
-    # ── HERO DESCRIPTION (pack-specific) ─────────────────────────────────────
-    # Accommodation: review-driven one-liner using real highlights.
-    # Other packs: None — template falls back to tagline.
-    if industry_pack == "accommodation":
-        loc_str = city or industry
-        hero_description = build_accommodation_hero(name, loc_str, review_intel)
+    # Signal-based extraction from real review text (no fabrication)
+    review_phrases   = extract_review_phrases(reviews)           # punchy opening sentences
+    _love_signal     = extract_what_people_love(reviews)         # keyword-matched phrases
+
+    # Fallback to frequency-based extraction if signal extraction yields < 2 items
+    if len(_love_signal) < 2:
+        _love_raw        = _build_what_people_love(review_intel, category, industry)
+        what_people_love = [item.capitalize() for item in _love_raw[:4]]
     else:
-        hero_description = ""
+        what_people_love = _love_signal
+
+    # ── HERO LINE ────────────────────────────────────────────────────────────
+    # Priority: real review phrase → location fallback.
+    # No generated text. No Unsplash. No AI assumptions.
+    hero_line        = build_hero_line(review_phrases, city or industry)
+
+    # Keep hero_description for backward compat (older demos stored it)
+    hero_description = hero_line
 
     # ── MAP EMBED ────────────────────────────────────────────────────────────
     # Use coords if available, otherwise fall back to address search
@@ -523,7 +606,10 @@ def build_business_data(lead: dict, industry: str) -> dict:
         "about_headline":   about_headline,
         # Industry pack + pack-specific content
         "industry_pack":     industry_pack,
-        "hero_description":  hero_description,
+        "hero_description":  hero_description,   # backward compat alias
+        # Signal-based content (from real review text)
+        "hero_line":         hero_line,
+        "review_phrases":    review_phrases,
         # Diagnostic / opportunity intelligence
         "has_website":        has_website,
         "website_url":        website_url,

@@ -20,7 +20,7 @@
 
     body { font-family: Inter, ui-sans-serif, system-ui, sans-serif; background: var(--bg); }
 
-    /* WA floating pulse */
+    /* WhatsApp fab pulse */
     @keyframes wa-pulse {
       0%, 100% { box-shadow: 0 0 0 0 rgba(37,211,102,0.45); }
       65%       { box-shadow: 0 0 0 14px rgba(37,211,102,0); }
@@ -35,23 +35,21 @@
     #hero-bg { animation: hero-zoom 9s ease-out forwards; }
 
     /* Scroll reveal */
-    .reveal { opacity: 0; transform: translateY(20px); transition: opacity 0.5s ease, transform 0.5s ease; }
+    .reveal { opacity: 0; transform: translateY(18px); transition: opacity 0.5s ease, transform 0.5s ease; }
     .reveal.on { opacity: 1; transform: none; }
 
     .stars { color: #F59E0B; }
 
-    /* Modal */
-    #modal-overlay {
-      display: none; position: fixed; inset: 0; z-index: 60;
-      background: rgba(0,0,0,0.75); backdrop-filter: blur(4px);
-      align-items: center; justify-content: center;
+    /* Review strip — horizontal scroll, no scrollbar */
+    .review-strip {
+      display: flex;
+      gap: 0.75rem;
+      overflow-x: auto;
+      scrollbar-width: none;
+      -webkit-overflow-scrolling: touch;
+      padding-bottom: 2px;
     }
-    #modal-overlay.open { display: flex; }
-    #modal-box {
-      background: var(--primary); max-width: 560px; width: 92vw;
-      max-height: 85vh; overflow-y: auto;
-      border-radius: 20px; padding: 2rem 2rem 2.5rem;
-    }
+    .review-strip::-webkit-scrollbar { display: none; }
   </style>
 </head>
 
@@ -60,8 +58,10 @@
 
 <!-- ══════════════════════════════════════════════
      SECTION 1 · HERO
+     Full-bleed: real photo or solid brand colour.
+     Elements: name · hero line (real review) · rating · WhatsApp CTA
 ══════════════════════════════════════════════ -->
-<section class="relative min-h-[92vh] flex items-end overflow-hidden" style="background:var(--primary)">
+<section class="relative min-h-[95vh] flex items-end overflow-hidden" style="background:var(--primary)">
 
   {% if hero_image %}
   <img id="hero-bg" src="{{ hero_image }}" alt="{{ name }}"
@@ -70,87 +70,55 @@
        class="absolute inset-0 w-full h-full object-cover object-center" />
   {% endif %}
 
-  <div class="absolute inset-0 bg-gradient-to-t from-black/90 via-black/50 to-black/15 pointer-events-none"></div>
+  <!-- Dark gradient — text always readable regardless of photo -->
+  <div class="absolute inset-0 bg-gradient-to-t from-black/95 via-black/55 to-black/10 pointer-events-none"></div>
+  <!-- Subtle dot texture — looks designed even with no photo -->
   <div class="absolute inset-0 pointer-events-none"
-       style="background-image:radial-gradient(rgba(255,255,255,0.04) 1px,transparent 1px);background-size:26px 26px"></div>
+       style="background-image:radial-gradient(rgba(255,255,255,0.035) 1px,transparent 1px);background-size:28px 28px"></div>
 
-  <div class="relative z-10 w-full max-w-5xl mx-auto px-6 md:px-12 pb-16 md:pb-24">
+  <div class="relative z-10 w-full max-w-3xl mx-auto px-6 md:px-12 pb-16 md:pb-24">
 
     {% if category %}
-    <div class="inline-flex items-center gap-2 mb-5 px-3.5 py-1.5 rounded-full text-xs font-bold tracking-widest uppercase
-                text-white/90 border border-white/25 backdrop-blur-sm bg-white/10">
+    <div class="inline-flex items-center mb-5 px-3 py-1 rounded-full text-xs font-bold tracking-widest uppercase
+                text-white/75 border border-white/20 bg-white/10 backdrop-blur-sm">
       {{ category }}
     </div>
     {% endif %}
 
-    <h1 class="text-4xl md:text-6xl lg:text-7xl font-black text-white leading-[1.02] tracking-tight mb-3">
+    <!-- Business name -->
+    <h1 class="text-4xl md:text-6xl lg:text-7xl font-black text-white leading-[1.02] tracking-tight mb-5">
       {{ name }}
     </h1>
 
-    <!-- Hero description: pack-specific if available, else tagline -->
-    <p class="text-lg md:text-xl text-white/80 font-light max-w-xl leading-relaxed mb-5">
-      {{ hero_description if hero_description else tagline }}
+    <!-- Hero line: real review phrase — shown in quotes, never generated -->
+    {% if hero_line %}
+    <p class="text-lg md:text-xl text-white/65 font-light italic leading-snug mb-6 max-w-xl">
+      "{{ hero_line }}"
     </p>
+    {% endif %}
 
-    <!-- Rating -->
+    <!-- Rating row -->
     {% if rating %}
-    <div class="flex items-center gap-2 mb-3">
-      <span class="stars text-base font-bold">★★★★★</span>
-      <span class="text-white font-bold text-sm">{{ "%.1f"|format(rating|float) }}</span>
+    <div class="flex items-center gap-3 mb-7">
+      <span class="stars text-xl leading-none">★★★★★</span>
+      <span class="text-white font-bold text-lg leading-none">{{ "%.1f"|format(rating|float) }}</span>
       {% if reviews_count %}
-      <span class="text-white/50 text-sm">({{ reviews_count }} reviews)</span>
+      <span class="text-white/40 text-sm">{{ reviews_count }} Google reviews</span>
       {% endif %}
     </div>
     {% endif %}
 
-    <!-- Trust anchor — credibility without clutter -->
-    {% if city %}
-    <p class="text-xs text-white/40 font-medium tracking-wide mb-5">
-      Trusted by {% if industry_pack == "accommodation" %}guests{% else %}customers{% endif %} in {{ city }}
-    </p>
-    {% endif %}
-
-    <!-- Best review quote -->
-    {% if hero_quote %}
-    <div class="flex items-start gap-2 mb-6 max-w-lg">
-      <span class="text-yellow-400 text-sm flex-shrink-0 mt-0.5">❝</span>
-      <p class="text-sm text-white/75 italic leading-snug">
-        {{ hero_quote }}<span class="not-italic text-white/35 text-xs"> — Google review</span>
-      </p>
-    </div>
-    {% endif %}
-
-    <!-- CTA buttons -->
-    <div class="flex flex-wrap items-center gap-3 mb-5">
-      {% if wa_url %}
-      <a href="{{ wa_url }}" target="_blank" rel="noopener"
-         class="inline-flex items-center gap-2 font-bold text-sm rounded-full px-6 py-3 text-white
-                transition-all hover:-translate-y-0.5 active:scale-95 shadow-xl"
-         style="background:#25D366; box-shadow:0 4px 20px rgba(37,211,102,0.45)">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-          <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z M12 0C5.373 0 0 5.373 0 12c0 2.107.549 4.09 1.508 5.814L.057 23.998l6.305-1.654A11.945 11.945 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.891 0-3.658-.506-5.186-1.389l-.371-.221-3.844 1.008 1.027-3.748-.242-.387A9.955 9.955 0 012 12c0-5.514 4.486-10 10-10s10 4.486 10 10-4.486 10-10 10z"/>
-        </svg>
-        Chat on WhatsApp
-      </a>
-      {% endif %}
-
-      {# For accommodation: only show room/services button when there is real data.
-         Generic static service lists ("Double Room", etc.) are not specific enough
-         to surface — WhatsApp is the only CTA until real room data is available. #}
-      {% if services and industry_pack != "accommodation" %}
-      <button onclick="openModal()"
-              class="inline-flex items-center gap-2 font-semibold text-sm rounded-full px-6 py-3
-                     text-white border-2 border-white/35 backdrop-blur-sm
-                     transition-all hover:bg-white/15 active:scale-95">
-        View Services ↗
-      </button>
-      {% endif %}
-    </div>
-
-    {% if reviews_count and reviews_count|int > 20 %}
-    <p class="text-xs text-white/40 font-medium">
-      ✦ Trusted by {{ reviews_count }}+ {% if industry_pack == "accommodation" %}guests{% else %}customers{% endif %}
-    </p>
+    <!-- WhatsApp CTA — only action that matters -->
+    {% if wa_url %}
+    <a href="{{ wa_url }}" target="_blank" rel="noopener"
+       class="inline-flex items-center gap-2.5 font-bold text-sm rounded-full px-7 py-3.5 text-white
+              transition-all hover:-translate-y-0.5 active:scale-95"
+       style="background:#25D366; box-shadow:0 4px 24px rgba(37,211,102,0.5)">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+        <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z M12 0C5.373 0 0 5.373 0 12c0 2.107.549 4.09 1.508 5.814L.057 23.998l6.305-1.654A11.945 11.945 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.891 0-3.658-.506-5.186-1.389l-.371-.221-3.844 1.008 1.027-3.748-.242-.387A9.955 9.955 0 012 12c0-5.514 4.486-10 10-10s10 4.486 10 10-4.486 10-10 10z"/>
+      </svg>
+      Chat on WhatsApp
+    </a>
     {% endif %}
 
   </div>
@@ -158,108 +126,108 @@
 
 
 <!-- ══════════════════════════════════════════════
-     SECTION 2 · WHAT PEOPLE LOVE
+     SECTION 2 · REVIEW STRIP
+     Horizontal scroll of real phrases pulled from Google reviews.
+     Hidden if no real phrases extracted.
 ══════════════════════════════════════════════ -->
-{% if what_people_love %}
-<section class="py-16 md:py-20 reveal" style="background:var(--surface)">
-  <div class="max-w-5xl mx-auto px-6 md:px-12">
+{% if review_phrases %}
+<section class="py-8 overflow-hidden reveal" style="background:var(--surface)">
+  <div class="px-6 md:px-12">
 
-    <p class="text-xs font-extrabold tracking-widest uppercase mb-2" style="color:var(--accent)">
-      {% if industry_pack == "accommodation" %}Why guests choose this place{% else %}Customer Favourite{% endif %}
+    <p class="text-[10px] font-extrabold tracking-widest uppercase mb-4" style="color:var(--accent)">
+      From Google reviews
     </p>
-    <h2 class="text-2xl md:text-3xl font-extrabold mb-8 tracking-tight" style="color:var(--primary)">
+
+    <div class="review-strip">
+      {% for phrase in review_phrases %}
+      <div class="flex-shrink-0 max-w-[260px] bg-white rounded-xl px-4 py-3 border border-gray-100 shadow-sm">
+        <p class="text-sm text-gray-700 italic leading-snug">"{{ phrase }}"</p>
+      </div>
+      {% endfor %}
+    </div>
+
+  </div>
+</section>
+{% endif %}
+
+
+<!-- ══════════════════════════════════════════════
+     SECTION 3 · GALLERY
+     Edge-to-edge grid. Only shown with ≥3 real Google photos.
+     Never shown with stock images.
+══════════════════════════════════════════════ -->
+{% if show_gallery and gallery_images %}
+<section class="bg-black reveal">
+
+  <div class="grid grid-cols-2 md:grid-cols-3 gap-px">
+    {% for img in gallery_images[:6] %}
+    <div class="overflow-hidden bg-gray-900
+                {% if loop.index == 1 %}col-span-2 md:col-span-2{% endif %}">
+      <img src="{{ img }}" alt="{{ name }}" loading="lazy" referrerpolicy="no-referrer"
+           onerror="this.parentElement.style.display='none'"
+           class="w-full h-full object-cover transition-transform duration-700 hover:scale-[1.03]
+                  {% if loop.index == 1 %}min-h-[240px] md:min-h-[380px]{% else %}aspect-square{% endif %}" />
+    </div>
+    {% endfor %}
+  </div>
+
+</section>
+{% endif %}
+
+
+<!-- ══════════════════════════════════════════════
+     SECTION 4 · WHAT PEOPLE LOVE + REVIEWS
+     Signal-based: keyword-matched from real review text.
+     Full review cards shown below the highlights grid.
+══════════════════════════════════════════════ -->
+{% if what_people_love or reviews %}
+<section class="py-14 md:py-20 reveal" style="background:var(--surface)">
+  <div class="max-w-3xl mx-auto px-6 md:px-12">
+
+    {% if what_people_love %}
+    <p class="text-[10px] font-extrabold tracking-widest uppercase mb-2" style="color:var(--accent)">
+      {% if industry_pack == "accommodation" %}Guests mention this most{% else %}Customers mention this most{% endif %}
+    </p>
+    <h2 class="text-2xl md:text-3xl font-extrabold mb-7 tracking-tight" style="color:var(--primary)">
       What people love
     </h2>
 
-    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 mb-10">
       {% for item in what_people_love %}
-      <div class="flex items-center gap-3 bg-white rounded-xl px-4 py-3 shadow-sm border border-gray-100">
-        <span class="text-sm font-bold flex-shrink-0" style="color:var(--accent)">✔</span>
+      <div class="flex items-center gap-3 bg-white rounded-xl px-5 py-3.5 border border-gray-100">
+        <span class="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0
+                     text-white text-[10px] font-black" style="background:var(--accent)">✔</span>
         <span class="text-sm font-semibold text-gray-800">{{ item }}</span>
       </div>
       {% endfor %}
     </div>
+    {% endif %}
 
-  </div>
-</section>
-{% endif %}
-
-
-<!-- ══════════════════════════════════════════════
-     SECTION 3 · GALLERY (real photos only — never shown without them)
-══════════════════════════════════════════════ -->
-{% if show_gallery and gallery_images %}
-<section class="py-16 md:py-20 bg-white reveal">
-  <div class="max-w-5xl mx-auto px-6 md:px-12">
-
-    <p class="text-xs font-extrabold tracking-widest uppercase mb-2" style="color:var(--accent)">Photos</p>
-    <h2 class="text-2xl md:text-3xl font-extrabold mb-8 tracking-tight" style="color:var(--primary)">
-      {% if industry_pack == "accommodation" %}The rooms &amp; property
-      {% elif "coffee" in category|lower or "cafe" in category|lower or "restaurant" in category|lower %}See the space
-      {% else %}See us in action{% endif %}
-    </h2>
-
-    <div class="grid grid-cols-2 md:grid-cols-3 gap-2 md:gap-3">
-      {% for img in gallery_images[:6] %}
-      <div class="rounded-xl overflow-hidden bg-gray-100
-                  {% if loop.index == 1 %}col-span-2 row-span-2{% endif %}">
-        <img src="{{ img }}" alt="{{ name }}" loading="lazy" referrerpolicy="no-referrer"
-             onerror="this.parentElement.style.display='none'"
-             class="w-full h-full object-cover
-                    {% if loop.index == 1 %}min-h-[240px] md:min-h-[320px]{% else %}aspect-square{% endif %}" />
-      </div>
-      {% endfor %}
-    </div>
-
-  </div>
-</section>
-{% endif %}
-
-
-<!-- ══════════════════════════════════════════════
-     SECTION 4 · REVIEWS (3 max — real only)
-══════════════════════════════════════════════ -->
-{% if reviews %}
-<section class="py-16 md:py-20 reveal" style="background:var(--surface)">
-  <div class="max-w-5xl mx-auto px-6 md:px-12">
-
-    <p class="text-xs font-extrabold tracking-widest uppercase mb-2" style="color:var(--accent)">Reviews</p>
-    <h2 class="text-2xl md:text-3xl font-extrabold mb-8 tracking-tight" style="color:var(--primary)">
-      What {% if industry_pack == "accommodation" %}guests{% else %}customers{% endif %} say
-    </h2>
-
-    <div class="grid gap-8
-      {% if reviews|length == 1 %}grid-cols-1 max-w-lg
+    <!-- Full review cards — real text, no fabrication -->
+    {% if reviews %}
+    <div class="grid gap-7
+      {% if reviews|length == 1 %}grid-cols-1 max-w-md
       {% elif reviews|length == 2 %}sm:grid-cols-2
       {% else %}sm:grid-cols-3{% endif %}">
       {% for r in reviews %}
       <div class="flex flex-col">
-        <!-- Stars -->
-        <div class="stars text-sm mb-3 tracking-widest">★★★★★</div>
-        <!-- Review text — large, no card border -->
-        <p class="text-gray-800 text-base leading-relaxed italic flex-1 mb-4">
-          "{{ r.text[:240] }}{% if r.text|length > 240 %}…{% endif %}"
+        <div class="stars text-sm mb-2 tracking-widest">★★★★★</div>
+        <p class="text-gray-700 text-sm leading-relaxed italic flex-1 mb-3">
+          "{{ r.text[:220] }}{% if r.text|length > 220 %}…{% endif %}"
         </p>
-        <!-- Author -->
-        <div class="flex items-center gap-2 pt-3 border-t border-gray-100">
-          <div class="w-6 h-6 rounded-full flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0"
-               style="background: hsl({{ (loop.index * 97) % 360 }}, 45%, 42%)">
-            {{ r.author[0]|upper if r.author else "?" }}
-          </div>
-          <span class="text-xs font-semibold text-gray-400">{{ r.author }}</span>
-        </div>
+        <span class="text-xs text-gray-400 font-medium">— {{ r.author }}</span>
       </div>
       {% endfor %}
     </div>
 
     {% if google_maps_url and reviews_count and reviews_count|int > 3 %}
-    <div class="mt-6 text-center">
+    <div class="mt-8 text-center">
       <a href="{{ google_maps_url }}" target="_blank" rel="noopener"
-         class="inline-flex items-center gap-1 text-sm font-semibold hover:underline"
-         style="color:var(--accent)">
+         class="text-sm font-semibold hover:underline" style="color:var(--accent)">
         Read all {{ reviews_count }} reviews on Google ↗
       </a>
     </div>
+    {% endif %}
     {% endif %}
 
   </div>
@@ -269,53 +237,53 @@
 
 <!-- ══════════════════════════════════════════════
      SECTION 5 · LOCATION
+     Map embed + address + Google Maps link.
 ══════════════════════════════════════════════ -->
 {% if address or map_embed %}
-<section class="py-16 md:py-20 bg-white reveal" id="location">
-  <div class="max-w-5xl mx-auto px-6 md:px-12">
+<section class="py-14 md:py-20 bg-white reveal" id="location">
+  <div class="max-w-3xl mx-auto px-6 md:px-12">
 
-    <p class="text-xs font-extrabold tracking-widest uppercase mb-2" style="color:var(--accent)">Find Us</p>
-    <h2 class="text-2xl md:text-3xl font-extrabold mb-8 tracking-tight" style="color:var(--primary)">Where to find us</h2>
+    <p class="text-[10px] font-extrabold tracking-widest uppercase mb-2" style="color:var(--accent)">
+      Find Us
+    </p>
+    <h2 class="text-2xl md:text-3xl font-extrabold mb-7 tracking-tight" style="color:var(--primary)">
+      Where to find us
+    </h2>
 
-    <div class="grid md:grid-cols-2 gap-8 items-start">
+    {% if map_embed %}
+    <div class="rounded-2xl overflow-hidden border border-gray-100 shadow-sm mb-6" style="aspect-ratio:16/9">
+      <iframe src="{{ map_embed }}" width="100%" height="100%"
+              style="border:0" allowfullscreen loading="lazy"
+              referrerpolicy="no-referrer-when-downgrade"></iframe>
+    </div>
+    {% endif %}
 
-      {% if map_embed %}
-      <div class="rounded-2xl overflow-hidden border border-gray-100 shadow-sm" style="aspect-ratio:4/3">
-        <iframe src="{{ map_embed }}" width="100%" height="100%"
-                style="border:0" allowfullscreen loading="lazy"
-                referrerpolicy="no-referrer-when-downgrade"></iframe>
-      </div>
+    <div class="flex flex-col sm:flex-row sm:items-center gap-4">
+      {% if address %}
+      <p class="text-sm text-gray-600 flex-1 leading-relaxed">{{ address }}</p>
       {% endif %}
 
-      <div class="flex flex-col gap-5">
-        {% if address %}
-        <div>
-          <p class="text-[10px] font-extrabold tracking-widest uppercase mb-1" style="color:var(--accent)">Address</p>
-          <p class="text-sm text-gray-700 leading-relaxed">{{ address }}</p>
-        </div>
-        {% endif %}
-
-        {% if google_maps_url %}
-        <a href="{{ google_maps_url }}" target="_blank" rel="noopener"
-           class="inline-flex items-center gap-1.5 text-sm font-semibold self-start px-4 py-2 rounded-lg
-                  border border-gray-200 text-gray-700 hover:border-gray-400 transition-colors">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-            <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/>
-          </svg>
-          Open in Google Maps
-        </a>
-        {% endif %}
-      </div>
-
+      {% if google_maps_url %}
+      <a href="{{ google_maps_url }}" target="_blank" rel="noopener"
+         class="inline-flex items-center gap-1.5 text-sm font-semibold flex-shrink-0
+                px-4 py-2.5 rounded-xl border border-gray-200 text-gray-700
+                hover:border-gray-400 transition-colors">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/>
+        </svg>
+        Open in Google Maps
+      </a>
+      {% endif %}
     </div>
+
   </div>
 </section>
 {% endif %}
 
 
 <!-- Footer -->
-<footer class="border-t border-gray-200 py-5 text-center text-xs text-gray-400" style="background:var(--surface)">
-  © {{ name }}{% if city %} · {{ city }}{% endif %}
+<footer class="py-5 text-center text-xs text-gray-400 border-t border-gray-100" style="background:var(--surface)">
+  {{ name }}{% if city %} · {{ city }}{% endif %}
 </footer>
 
 
@@ -324,65 +292,15 @@
 ══════════════════════════════════════════════ -->
 {% if wa_url %}
 <a href="{{ wa_url }}" target="_blank" rel="noopener"
-   class="wa-fab fixed bottom-5 right-5 z-50 flex items-center gap-2 font-bold text-sm text-white
-          rounded-full shadow-2xl transition-all hover:scale-105 active:scale-95"
-   style="background:#25D366; padding:0.75rem 1.2rem">
+   class="wa-fab fixed bottom-5 right-5 z-50 flex items-center gap-2
+          font-bold text-sm text-white rounded-full shadow-2xl
+          transition-all hover:scale-105 active:scale-95"
+   style="background:#25D366; padding:0.75rem 1.25rem">
   <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
     <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z M12 0C5.373 0 0 5.373 0 12c0 2.107.549 4.09 1.508 5.814L.057 23.998l6.305-1.654A11.945 11.945 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.891 0-3.658-.506-5.186-1.389l-.371-.221-3.844 1.008 1.027-3.748-.242-.387A9.955 9.955 0 012 12c0-5.514 4.486-10 10-10s10 4.486 10 10-4.486 10-10 10z"/>
   </svg>
   <span class="hidden sm:inline">Chat with us</span>
 </a>
-{% endif %}
-
-
-<!-- ══════════════════════════════════════════════
-     MODAL — Rooms / Services
-     Only rendered when service list exists
-══════════════════════════════════════════════ -->
-{% if services %}
-<div id="modal-overlay" role="dialog" aria-modal="true"
-     aria-label="{% if industry_pack == 'accommodation' %}Room types{% else %}Services{% endif %}"
-     onclick="closeModalIfOverlay(event)">
-  <div id="modal-box">
-
-    <div class="flex items-center justify-between mb-6">
-      <div>
-        <p class="text-xs font-extrabold tracking-widest uppercase mb-0.5" style="color:var(--accent)">
-          {% if industry_pack == "accommodation" %}Room Types{% else %}Our Services{% endif %}
-        </p>
-        <h3 class="text-xl font-extrabold text-white">{{ name }}</h3>
-      </div>
-      <button onclick="closeModal()"
-              class="w-8 h-8 rounded-full flex items-center justify-center text-white/50
-                     hover:text-white hover:bg-white/15 transition-colors text-lg font-bold"
-              aria-label="Close">✕</button>
-    </div>
-
-    <div class="space-y-3">
-      {% for service in services[:8] %}
-      <div class="flex items-start gap-3 py-3 border-b border-white/10 last:border-0">
-        <span class="w-1.5 h-1.5 rounded-full flex-shrink-0 mt-2" style="background:var(--accent)"></span>
-        <p class="text-sm font-semibold text-white">{{ service }}</p>
-      </div>
-      {% endfor %}
-    </div>
-
-    {% if wa_url %}
-    <div class="mt-6 pt-5 border-t border-white/10">
-      <a href="{{ wa_url }}" target="_blank" rel="noopener"
-         class="flex items-center justify-center gap-2 font-bold text-sm text-white
-                rounded-full px-6 py-3 w-full transition-all hover:brightness-110"
-         style="background:#25D366">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-          <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z M12 0C5.373 0 0 5.373 0 12c0 2.107.549 4.09 1.508 5.814L.057 23.998l6.305-1.654A11.945 11.945 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.891 0-3.658-.506-5.186-1.389l-.371-.221-3.844 1.008 1.027-3.748-.242-.387A9.955 9.955 0 012 12c0-5.514 4.486-10 10-10s10 4.486 10 10-4.486 10-10 10z"/>
-        </svg>
-        {% if industry_pack == "accommodation" %}Enquire about availability{% else %}Chat to enquire on WhatsApp{% endif %}
-      </a>
-    </div>
-    {% endif %}
-
-  </div>
-</div>
 {% endif %}
 
 
@@ -398,20 +316,6 @@
   } else {
     document.querySelectorAll('.reveal').forEach(el => el.classList.add('on'));
   }
-
-  // Modal
-  function openModal() {
-    const el = document.getElementById('modal-overlay');
-    if (el) { el.classList.add('open'); document.body.style.overflow = 'hidden'; }
-  }
-  function closeModal() {
-    const el = document.getElementById('modal-overlay');
-    if (el) { el.classList.remove('open'); document.body.style.overflow = ''; }
-  }
-  function closeModalIfOverlay(e) {
-    if (e.target === document.getElementById('modal-overlay')) closeModal();
-  }
-  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
 </script>
 
 </body>

@@ -14,6 +14,7 @@ Apify actor: compass/crawler-google-places
 import os
 import json
 import re
+import time
 import unicodedata
 import requests
 from src.config import APIFY_API_TOKEN, APIFY_ACTOR_ID, CACHE_DIR
@@ -222,15 +223,13 @@ def expand_location(location: str) -> list[str]:
 
 def build_queries(industry: str, location: str) -> list[str]:
     """
-    Build a list of varied search strings for one industry + location.
-    Passed together as searchStringsArray in a single Apify call so
-    Apify fetches all variants in parallel (no extra cost / time).
+    Build 3 search variants per location — enough coverage without
+    pushing Apify run-time into timeout territory.
+    Passed together as searchStringsArray in a single call.
     """
     return [
         f"{industry} {location}",
         f"{industry} near {location}",
-        f"{industry} shop {location}",
-        f"{industry} store {location}",
         f"best {industry} {location}",
     ]
 
@@ -601,9 +600,9 @@ def _apify_fetch(queries: list[str], location: str) -> list[dict]:
         f"/run-sync-get-dataset-items"
     )
     payload = {
-        "searchStringsArray":        queries,        # all variants in one call
+        "searchStringsArray":        queries,
         "locationQuery":             location,
-        "maxCrawledPlacesPerSearch": MAX_PLACES,
+        "maxCrawledPlacesPerSearch": 20,        # 20 per query string keeps runs fast
         "maxReviews":                MAX_REVIEWS,
         "maxImages":                 MAX_IMAGES,
         "language":                  "en",
@@ -611,8 +610,9 @@ def _apify_fetch(queries: list[str], location: str) -> list[dict]:
     }
 
     print(f"[Search] POST {url}")
-    print(f"[Search] Waiting for Apify (timeout: {SYNC_TIMEOUT}s, {len(queries)} queries)...")
+    print(f"[Search] Waiting for Apify ({len(queries)} queries, max 20 places each)...")
 
+    t0 = time.time()
     try:
         resp = requests.post(
             url,
@@ -625,7 +625,7 @@ def _apify_fetch(queries: list[str], location: str) -> list[dict]:
     except requests.exceptions.RequestException as e:
         raise Exception(f"Fetcher failed: HTTP error calling Apify: {e}")
 
-    print(f"[Search] Apify HTTP {resp.status_code}")
+    print(f"[Search] Apify completed in {time.time() - t0:.1f}s  (HTTP {resp.status_code})")
 
     if resp.status_code not in (200, 201):
         raise Exception(
@@ -681,13 +681,25 @@ def fetch_leads(industry: str, location: str) -> list[dict]:
     seen_q: set[str] = set()
     queries = [q for q in queries if not (q in seen_q or seen_q.add(q))]  # type: ignore[func-returns-value]
 
+    _pipeline_start = time.time()
     print(f"\n[Search] ── Qualification pipeline ──")
     print(f"[Search] Expanded locations: {locations}")
     print(f"[Search] Total queries:      {len(queries)}")
     print(f"[Search] Queries: {queries}")
 
     # ── STEP 2: Fetch all queries in one Apify call ─────────────────────────
-    raw_items = _apify_fetch(queries, location)
+    # Timeout fallback: if the full query set times out, retry with a trimmed
+    # set (first 8 queries) so the user always gets some results.
+    FALLBACK_QUERY_LIMIT = 8
+    try:
+        raw_items = _apify_fetch(queries, location)
+    except Exception as e:
+        if "timed out" in str(e).lower() and len(queries) > FALLBACK_QUERY_LIMIT:
+            trimmed = queries[:FALLBACK_QUERY_LIMIT]
+            print(f"[Search] ⚠  Timeout — retrying with {len(trimmed)} queries (trimmed from {len(queries)})")
+            raw_items = _apify_fetch(trimmed, location)
+        else:
+            raise
     print(f"[Search] Total fetched:    {len(raw_items)}")
 
     # ── STEP 3: Normalise + Deduplicate ────────────────────────────────────
@@ -751,6 +763,7 @@ def fetch_leads(industry: str, location: str) -> list[dict]:
 
     top_leads = filtered[:MAX_PLACES]
     print(f"[Search] Final returned:   {len(top_leads)}")
+    print(f"[Search] Pipeline total:   {time.time() - _pipeline_start:.1f}s")
 
     # ── Update side-channel stats for pipeline.py ──────────────────────────
     _last_fetch_stats["raw"]               = len(normalised)

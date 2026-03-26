@@ -6,24 +6,19 @@
   <title>{{ name }}</title>
   <meta name="referrer" content="no-referrer" />
 
-  <!-- Tailwind CDN (play build — full JIT + arbitrary values) -->
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
       theme: {
         extend: {
           fontFamily: { sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'] },
-          maxWidth:   { page: '1200px' },
         }
       }
     }
   </script>
-
-  <!-- Google Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,400&display=swap" rel="stylesheet" />
 
-  <!-- Dynamic brand colours as CSS variables -->
   <style>
     :root {
       --accent:   {{ color_accent }};
@@ -32,143 +27,81 @@
       --surface:  {{ color_surface }};
     }
 
-    /* Floating WA pulse */
+    /* WA floating pulse */
     @keyframes wa-pulse {
-      0%, 100% { box-shadow: 0 0 0 0 rgba(37,211,102,0.5); }
-      60%       { box-shadow: 0 0 0 12px rgba(37,211,102,0); }
+      0%, 100% { box-shadow: 0 0 0 0 rgba(37,211,102,0.45); }
+      65%       { box-shadow: 0 0 0 14px rgba(37,211,102,0); }
     }
-    .wa-pulse { animation: wa-pulse 2.5s ease-in-out infinite; }
+    .wa-fab { animation: wa-pulse 2.8s ease-in-out infinite; }
 
-    /* Smooth image zoom on hover */
+    /* Hero image slow zoom */
+    @keyframes hero-zoom {
+      from { transform: scale(1.06); }
+      to   { transform: scale(1.00); }
+    }
+    #hero-bg { animation: hero-zoom 9s ease-out forwards; }
+
+    /* Scroll reveal */
+    .reveal { opacity: 0; transform: translateY(20px); transition: opacity 0.5s ease, transform 0.5s ease; }
+    .reveal.on { opacity: 1; transform: none; }
+
+    /* Image hover zoom */
     .img-zoom { overflow: hidden; }
     .img-zoom img { transition: transform 0.4s ease; }
     .img-zoom:hover img { transform: scale(1.06); }
 
-    /* Scroll reveal */
-    .reveal { opacity: 0; transform: translateY(22px); transition: opacity 0.55s ease, transform 0.55s ease; }
-    .reveal.on { opacity: 1; transform: none; }
+    .stars { color: #F59E0B; }
 
-    /* Star rating fill */
-    .stars { color: #FFB800; }
-
-    /* Accent colour utilities (used inline via style=) */
-    .accent-bg  { background-color: var(--accent); }
-    .accent-txt { color: var(--accent); }
-    .accent-bdr { border-color: var(--accent); }
-
-    /* Preview banner */
-    .preview-bar { background: var(--primary); }
+    /* Modal */
+    #modal-overlay {
+      display: none;
+      position: fixed; inset: 0; z-index: 60;
+      background: rgba(0,0,0,0.75);
+      backdrop-filter: blur(4px);
+      align-items: center; justify-content: center;
+    }
+    #modal-overlay.open { display: flex; }
+    #modal-box {
+      background: var(--primary);
+      max-width: 560px; width: 92vw;
+      max-height: 85vh; overflow-y: auto;
+      border-radius: 20px;
+      padding: 2rem 2rem 2.5rem;
+    }
   </style>
 </head>
-<body class="font-sans text-gray-900 antialiased" style="background:var(--bg)">
 
-<!-- ────────────────────────────────────────────────────────────
-     PREVIEW BANNER
-──────────────────────────────────────────────────────────── -->
-<div class="preview-bar text-center py-2 px-4 text-xs tracking-wide text-white/70">
-  ✦ <span class="font-semibold text-white">Your upgraded online presence</span>
-  — <strong>{{ name }}</strong>, this was built specifically for you
-</div>
-<div class="text-center py-2 px-4 text-xs text-gray-300" style="background:#1a1f2e">
-  {% if "coffee" in category|lower or "cafe" in category|lower or "restaurant" in category|lower or "bakery" in category|lower %}
-  People are searching for you right now — and finding competitors instead
-  {% elif "salon" in category|lower or "barber" in category|lower or "spa" in category|lower %}
-  No WhatsApp = lost bookings every day
-  {% elif "mechanic" in category|lower or "auto" in category|lower or "plumber" in category|lower or "electrician" in category|lower %}
-  Customers are searching — but not converting without a website
-  {% else %}
-  You're missing customers searching for you right now
-  {% endif %}
-</div>
+<body class="font-sans antialiased" style="background:var(--bg)">
 
 
-<!-- ════════════════════════════════════════════════════════════
-     DIAGNOSTIC STRIP · WEBSITE CHECK
-════════════════════════════════════════════════════════════ -->
-<div class="bg-gray-950 border-b border-gray-800">
-  <div class="max-w-page mx-auto px-6 md:px-12 py-3 flex flex-wrap items-center justify-between gap-3">
-
-    <!-- Status checks -->
-    <div class="flex flex-wrap items-center gap-x-5 gap-y-1.5">
-      <span class="text-xs font-extrabold tracking-widest uppercase text-gray-500">Website Check</span>
-
-      {% if website_status == "none" %}
-      <span class="text-xs font-semibold text-red-400">❌ No website</span>
-      {% elif website_status == "basic" %}
-      <span class="text-xs font-semibold text-yellow-400">⚠️ Basic website (not optimised)</span>
-      {% else %}
-      <span class="text-xs font-semibold text-gray-500">⚠️ Website status unknown</span>
-      {% endif %}
-
-      {% if not has_whatsapp %}
-      <span class="text-xs font-semibold text-red-400">❌ No WhatsApp contact</span>
-      {% else %}
-      <span class="text-xs font-semibold text-green-400">✅ WhatsApp active</span>
-      {% endif %}
-
-      {% if strong_reviews %}
-      <span class="text-xs font-semibold text-yellow-400">⚠️ Strong reviews not being used</span>
-      {% else %}
-      <span class="text-xs font-semibold text-gray-500">⚠️ Reviews not being leveraged</span>
-      {% endif %}
-    </div>
-
-    <!-- Opportunity score badge -->
-    <div class="flex items-center gap-2 flex-shrink-0">
-      <span class="text-xs text-gray-500 font-semibold tracking-wide">Opportunity</span>
-      <span class="px-2.5 py-1 rounded-full text-xs font-extrabold tracking-wide
-        {% if opportunity_label == 'High' %}bg-green-500/20 text-green-400 border border-green-500/30
-        {% elif opportunity_label == 'Medium' %}bg-amber-500/20 text-amber-400 border border-amber-500/30
-        {% else %}bg-gray-700/40 text-gray-400 border border-gray-600/30
-        {% endif %}">
-        {{ opportunity_score }}/10 · {{ opportunity_label }}
-      </span>
-    </div>
-
-  </div>
-</div>
-
-
-<!-- ════════════════════════════════════════════════════════════
-     SECTION 1 · HERO
-════════════════════════════════════════════════════════════ -->
-<section class="relative min-h-[88vh] flex items-end overflow-hidden" style="background:var(--primary)">
+<!-- ══════════════════════════════════════════════
+     1 · HERO
+══════════════════════════════════════════════ -->
+<section class="relative min-h-[92vh] flex items-end overflow-hidden" style="background:var(--primary)">
 
   <!-- Background photo -->
   {% if hero_image %}
-  <img id="heroImg" src="{{ hero_image }}" alt="{{ name }}" referrerpolicy="no-referrer"
+  <img id="hero-bg" src="{{ hero_image }}" alt="{{ name }}"
+       referrerpolicy="no-referrer"
        onerror="this.style.display='none'"
-       class="absolute inset-0 w-full h-full object-cover object-center scale-105 transition-transform duration-[9000ms]" />
+       class="absolute inset-0 w-full h-full object-cover object-center" />
   {% endif %}
 
-  <!-- Gradient overlay -->
-  <div class="absolute inset-0 bg-gradient-to-t from-black/90 via-black/45 to-black/20 pointer-events-none"></div>
+  <!-- Gradient -->
+  <div class="absolute inset-0 bg-gradient-to-t from-black/90 via-black/50 to-black/15 pointer-events-none"></div>
 
-  <!-- Subtle texture dots (shows when no photo) -->
+  <!-- Subtle dot texture (shows when no photo) -->
   <div class="absolute inset-0 pointer-events-none"
-       style="background-image:radial-gradient(rgba(255,255,255,0.055) 1px, transparent 1px); background-size:28px 28px"></div>
+       style="background-image:radial-gradient(rgba(255,255,255,0.04) 1px, transparent 1px); background-size:26px 26px"></div>
 
   <!-- Content -->
-  <div class="relative z-10 w-full max-w-page mx-auto px-6 md:px-12 pb-14 md:pb-20">
+  <div class="relative z-10 w-full max-w-5xl mx-auto px-6 md:px-12 pb-16 md:pb-24">
 
     <!-- Category pill -->
     {% if category %}
-    <div class="inline-flex items-center gap-1.5 mb-5 px-3 py-1 rounded-full text-xs font-bold tracking-widest uppercase
-                text-white border border-white/30 backdrop-blur-sm bg-white/10">
-      {{ category }}{% if city %} · {{ city }}{% endif %}
-    </div>
-    {% endif %}
-
-    <!-- Rating badge (shown above name when rating is notably high or for local framing) -->
-    {% if rating_badge == "highly_rated" %}
-    <div class="inline-flex items-center gap-1.5 mb-3 px-3 py-1 rounded-full text-xs font-bold
-                bg-yellow-400/20 border border-yellow-400/40 text-yellow-300">
-      ⭐ Highly rated by customers
-    </div>
-    {% elif rating_badge == "local" %}
-    <div class="inline-flex items-center gap-1.5 mb-3 px-3 py-1 rounded-full text-xs font-bold
-                bg-white/10 border border-white/25 text-white/80">
-      📍 Convenient local service
+    <div class="inline-flex items-center gap-2 mb-6 px-3.5 py-1.5 rounded-full text-xs font-bold tracking-widest uppercase
+                text-white/90 border border-white/25 backdrop-blur-sm bg-white/10">
+      {{ category }}
     </div>
     {% endif %}
 
@@ -176,127 +109,103 @@
     <h1 class="text-4xl md:text-6xl lg:text-7xl font-black text-white leading-[1.02] tracking-tight mb-2">
       {{ name }}
     </h1>
-    {% if city %}
-    <div class="text-sm text-white/50 mb-4 font-medium tracking-wide">📍 Based in {{ city }}</div>
-    {% endif %}
 
-    <!-- Short description -->
-    {% if about_text %}
-    <p class="text-white/70 text-base md:text-lg font-light max-w-xl leading-relaxed mb-6">
-      {{ about_text[:160] }}{% if about_text|length > 160 %}…{% endif %}
+    <!-- Tagline / location line -->
+    <p class="text-sm text-white/55 font-medium tracking-wide mb-4">
+      Local favourite{% if city %} · Serving {{ city }}{% endif %}
     </p>
-    {% elif tagline %}
-    <p class="text-white/70 text-base md:text-lg font-light max-w-xl leading-relaxed mb-6">{{ tagline }}</p>
+
+    <!-- AI positioning line -->
+    {% if tagline %}
+    <p class="text-lg md:text-xl text-white/85 font-light max-w-xl leading-relaxed mb-5">
+      {{ tagline }}
+    </p>
     {% endif %}
 
-    <!-- Real review snippet from Google -->
-    {% if hero_review %}
-    <div class="flex items-center gap-2 mb-5 max-w-lg">
-      <span class="text-yellow-400 text-sm flex-shrink-0">★★★★★</span>
-      <p class="text-sm text-white/75 italic">"{{ hero_review }}"
-        <span class="not-italic text-white/40 text-xs">— Google review</span>
+    <!-- Rating row -->
+    {% if rating %}
+    <div class="flex items-center gap-2 mb-5">
+      <span class="stars text-base font-bold">★★★★★</span>
+      <span class="text-white font-bold text-sm">{{ "%.1f"|format(rating|float) }}</span>
+      {% if reviews_count %}
+      <span class="text-white/50 text-sm">({{ reviews_count }} reviews)</span>
+      {% endif %}
+    </div>
+    {% endif %}
+
+    <!-- Hero quote from reviews -->
+    {% if hero_quote %}
+    <div class="flex items-start gap-2 mb-6 max-w-lg">
+      <span class="text-yellow-400 text-sm flex-shrink-0 mt-0.5">❝</span>
+      <p class="text-sm text-white/75 italic leading-snug">
+        {{ hero_quote }}
+        <span class="not-italic text-white/35 text-xs"> — Google review</span>
       </p>
     </div>
     {% endif %}
 
-    <!-- Action buttons -->
-    <div class="flex flex-wrap items-center gap-3 mb-7">
+    <!-- CTA buttons -->
+    <div class="flex flex-wrap items-center gap-3 mb-6">
       {% if wa_url %}
       <a href="{{ wa_url }}" target="_blank" rel="noopener"
-         class="inline-flex items-center gap-2 font-bold text-sm rounded-full px-6 py-3 text-white transition-all hover:-translate-y-0.5 hover:brightness-110 shadow-lg"
-         style="background:#25D366; box-shadow:0 4px 18px rgba(37,211,102,0.4)">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z M12 0C5.373 0 0 5.373 0 12c0 2.107.549 4.09 1.508 5.814L.057 23.998l6.305-1.654A11.945 11.945 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.891 0-3.658-.506-5.186-1.389l-.371-.221-3.844 1.008 1.027-3.748-.242-.387A9.955 9.955 0 012 12c0-5.514 4.486-10 10-10s10 4.486 10 10-4.486 10-10 10z"/></svg>
+         onclick="return true"
+         class="inline-flex items-center gap-2 font-bold text-sm rounded-full px-6 py-3 text-white transition-all hover:-translate-y-0.5 active:scale-95 shadow-xl"
+         style="background:#25D366; box-shadow:0 4px 20px rgba(37,211,102,0.45)">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+          <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z M12 0C5.373 0 0 5.373 0 12c0 2.107.549 4.09 1.508 5.814L.057 23.998l6.305-1.654A11.945 11.945 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.891 0-3.658-.506-5.186-1.389l-.371-.221-3.844 1.008 1.027-3.748-.242-.387A9.955 9.955 0 012 12c0-5.514 4.486-10 10-10s10 4.486 10 10-4.486 10-10 10z"/>
+        </svg>
         Chat on WhatsApp
       </a>
       {% endif %}
-      <a href="#services"
-         class="inline-flex items-center gap-2 font-semibold text-sm rounded-full px-6 py-3 text-white border-2 border-white/40 backdrop-blur-sm transition-all hover:bg-white/15">
-        View Services ↓
-      </a>
+
+      {% if services %}
+      <button onclick="openModal()"
+              class="inline-flex items-center gap-2 font-semibold text-sm rounded-full px-6 py-3 text-white border-2 border-white/35 backdrop-blur-sm transition-all hover:bg-white/15 active:scale-95">
+        {% if "menu" in cta_label|lower %}View Menu{% else %}View Services{% endif %} ↗
+      </button>
+      {% endif %}
     </div>
 
-    <!-- CTA micro-line under buttons -->
-    {% if cta_line %}
-    <p class="text-white/50 text-xs font-medium mt-1 mb-4 tracking-wide">
-      → {{ cta_line }}
+    <!-- Social proof micro-line -->
+    {% if reviews_count and reviews_count|int > 20 %}
+    <p class="text-xs text-white/40 font-medium">
+      ✦ Trusted by {{ reviews_count }}+ customers
     </p>
     {% endif %}
 
-    <!-- Missed enquiries line -->
-    <div class="flex items-center gap-2 mb-3 text-xs text-white/40 font-medium">
-      <span class="text-red-400">●</span>
-      Estimated missed enquiries: 10–30 per month without a digital presence
-    </div>
-
-    <!-- Rating row -->
-    {% if rating %}
-    <div class="flex items-center gap-2 text-sm">
-      <span class="stars font-bold tracking-tight">★★★★★</span>
-      <span class="text-white font-bold">{{ "%.1f"|format(rating|float) }}</span>
-      {% if reviews_count %}
-      <span class="text-white/55">({{ reviews_count }} reviews on Google)</span>
-      {% endif %}
-    </div>
-    {% endif %}
-
   </div>
 </section>
 
 
-<!-- ════════════════════════════════════════════════════════════
-     SECTION 2 · TRUST STRIP
-════════════════════════════════════════════════════════════ -->
+<!-- ══════════════════════════════════════════════
+     2 · TRUST BAR
+══════════════════════════════════════════════ -->
 <div class="bg-white border-b border-gray-100 shadow-sm reveal">
-  <div class="max-w-page mx-auto px-6 md:px-12">
-    <div class="grid grid-cols-2 md:grid-cols-4 divide-x divide-gray-100">
+  <div class="max-w-5xl mx-auto px-6 md:px-12">
+    <div class="flex flex-wrap items-center divide-y md:divide-y-0 md:divide-x divide-gray-100">
 
-      <!-- Rating -->
-      <div class="flex items-center gap-3 py-5 px-4">
-        <span class="text-2xl">⭐</span>
-        <div>
-          <p class="text-sm font-700 leading-tight" style="font-weight:700; color:var(--primary)">
-            {{ "%.1f"|format(rating|float) }}/5 Rating
-          </p>
-          <p class="text-xs text-gray-400 mt-0.5">{{ reviews_count }} Google reviews</p>
-        </div>
+      {% if rating %}
+      <div class="flex items-center gap-2.5 py-4 px-0 md:px-5 w-full md:w-auto">
+        <span class="text-xl leading-none">⭐</span>
+        <span class="text-sm font-bold" style="color:var(--primary)">{{ "%.1f"|format(rating|float) }}/5 Rating</span>
+      </div>
+      {% endif %}
+
+      {% if city %}
+      <div class="flex items-center gap-2.5 py-4 px-0 md:px-5 w-full md:w-auto">
+        <span class="text-xl leading-none">📍</span>
+        <span class="text-sm font-bold" style="color:var(--primary)">{{ city }}</span>
+      </div>
+      {% endif %}
+
+      <div class="flex items-center gap-2.5 py-4 px-0 md:px-5 w-full md:w-auto">
+        <span class="text-xl leading-none">🕒</span>
+        <span class="text-sm font-bold" style="color:var(--primary)">Open Today</span>
       </div>
 
-      <!-- Location -->
-      <div class="flex items-center gap-3 py-5 px-4">
-        <span class="text-2xl">📍</span>
-        <div>
-          <p class="text-sm font-bold leading-tight" style="color:var(--primary)">
-            {{ city if city else "Local Business" }}
-          </p>
-          <p class="text-xs text-gray-400 mt-0.5 truncate max-w-[160px]">
-            {{ address[:36] + "…" if address|length > 36 else address }}
-          </p>
-        </div>
-      </div>
-
-      <!-- Phone / contact -->
-      <div class="flex items-center gap-3 py-5 px-4">
-        <span class="text-2xl">📞</span>
-        <div>
-          {% if phone %}
-          <p class="text-sm font-bold leading-tight" style="color:var(--primary)">
-            <a href="tel:{{ phone }}">{{ phone }}</a>
-          </p>
-          <p class="text-xs text-gray-400 mt-0.5">Call or WhatsApp</p>
-          {% else %}
-          <p class="text-sm font-bold leading-tight" style="color:var(--primary)">Contact Us</p>
-          <p class="text-xs text-gray-400 mt-0.5">Via WhatsApp</p>
-          {% endif %}
-        </div>
-      </div>
-
-      <!-- Key benefit -->
-      <div class="flex items-center gap-3 py-5 px-4">
-        <span class="text-2xl">✅</span>
-        <div>
-          <p class="text-sm font-bold leading-tight" style="color:var(--primary)">{{ feature_stat }}</p>
-          <p class="text-xs text-gray-400 mt-0.5">{{ category if category else "Local Business" }}</p>
-        </div>
+      <div class="flex items-center gap-2.5 py-4 px-0 md:px-5 w-full md:w-auto">
+        <span class="text-xl leading-none">✅</span>
+        <span class="text-sm font-bold" style="color:var(--primary)">{{ feature_stat }}</span>
       </div>
 
     </div>
@@ -304,107 +213,79 @@
 </div>
 
 
-<!-- ════════════════════════════════════════════════════════════
-     SECTION 3 · IMAGE GALLERY
-════════════════════════════════════════════════════════════ -->
-{% if gallery_images %}
-<section class="py-20 md:py-24 reveal" style="background:var(--surface)">
-  <div class="max-w-page mx-auto px-6 md:px-12">
+<!-- ══════════════════════════════════════════════
+     3 · ABOUT
+══════════════════════════════════════════════ -->
+<section class="py-20 md:py-24 bg-white reveal">
+  <div class="max-w-5xl mx-auto px-6 md:px-12">
+    <div class="grid md:grid-cols-2 gap-12 items-center">
 
-    <p class="text-xs font-extrabold tracking-widest uppercase mb-1" style="color:var(--accent)">Our Space</p>
-    <h2 class="text-2xl md:text-3xl font-extrabold mb-8 tracking-tight" style="color:var(--primary)">See It for Yourself</h2>
-
-    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 md:gap-3">
-      {% for img in gallery_images[:8] %}
-      <div class="img-zoom rounded-xl overflow-hidden
-                  {% if loop.index == 1 %}col-span-2 row-span-2{% endif %}
-                  bg-gray-200">
-        <img src="{{ img }}" alt="{{ name }}" loading="lazy" referrerpolicy="no-referrer"
-             class="w-full h-full object-cover {% if loop.index == 1 %}min-h-[280px] md:min-h-[360px]{% else %}aspect-square{% endif %}"
-             onerror="this.parentElement.style.display='none'" />
-      </div>
-      {% endfor %}
-    </div>
-
-  </div>
-</section>
-{% endif %}
-
-
-<!-- ════════════════════════════════════════════════════════════
-     SECTION 4 · WHAT WE OFFER
-════════════════════════════════════════════════════════════ -->
-{% if services %}
-<section class="py-20 md:py-24 bg-white reveal" id="services">
-  <div class="max-w-page mx-auto px-6 md:px-12">
-
-    <p class="text-xs font-extrabold tracking-widest uppercase mb-1" style="color:var(--accent)">Services</p>
-    <h2 class="text-2xl md:text-3xl font-extrabold mb-8 tracking-tight" style="color:var(--primary)">What We Offer</h2>
-
-    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-      {% for service in services %}
-      <div class="flex items-center gap-3 p-4 rounded-xl border border-gray-100 bg-gray-50 hover:border-[var(--accent)] hover:shadow-sm transition-all">
-        <span class="w-2 h-2 rounded-full flex-shrink-0" style="background:var(--accent)"></span>
-        <span class="text-sm font-semibold text-gray-800">{{ service }}</span>
-      </div>
-      {% endfor %}
-    </div>
-
-  </div>
-</section>
-{% endif %}
-
-
-<!-- ════════════════════════════════════════════════════════════
-     PROMO BANNER (AI-generated offer/hook — hidden if empty)
-════════════════════════════════════════════════════════════ -->
-{% if promo %}
-<div style="background:var(--accent)">
-  <div class="text-center pt-2 text-xs uppercase tracking-widest text-white/50 font-semibold">
-    Example promotion
-  </div>
-  <div class="py-3 px-6 text-center text-sm font-bold text-white tracking-wide">
-    ⚡&nbsp; {{ promo }}
-  </div>
-</div>
-{% endif %}
-
-
-<!-- ════════════════════════════════════════════════════════════
-     OPTIONAL MODULE · MENU / SERVICES DETAIL
-     Renders ONLY when menu_enabled = True
-════════════════════════════════════════════════════════════ -->
-{% if menu_enabled and menu.sections %}
-<section class="py-20 md:py-24 reveal" style="background:var(--surface)">
-  <div class="max-w-page mx-auto px-6 md:px-12">
-
-    <p class="text-xs font-extrabold tracking-widest uppercase mb-1" style="color:var(--accent)">Menu</p>
-    <h2 class="text-2xl md:text-3xl font-extrabold mb-10 tracking-tight" style="color:var(--primary)">
-      {{ menu.title if menu.title else "Our Menu" }}
-    </h2>
-
-    <div class="grid md:grid-cols-2 gap-8">
-      {% for section in menu.sections %}
       <div>
-        <h3 class="text-base font-bold uppercase tracking-widest mb-4 pb-2 border-b border-gray-200"
-            style="color:var(--primary)">{{ section.title }}</h3>
-        <div class="space-y-3">
-          {% for item in section['items'] %}
-          <div class="flex items-start justify-between gap-4">
-            <div>
-              <p class="text-sm font-semibold text-gray-800">{{ item.name }}</p>
-              {% if item.description %}
-              <p class="text-xs text-gray-400 mt-0.5">{{ item.description }}</p>
-              {% endif %}
-            </div>
-            {% if item.price %}
-            <span class="text-sm font-bold flex-shrink-0 mt-0.5" style="color:var(--accent)">
-              {{ item.price }}
-            </span>
-            {% endif %}
-          </div>
+        <p class="text-xs font-extrabold tracking-widest uppercase mb-2" style="color:var(--accent)">About Us</p>
+        <h2 class="text-2xl md:text-3xl font-extrabold mb-4 leading-tight tracking-tight" style="color:var(--primary)">
+          {% if about_headline %}{{ about_headline }}{% else %}Our Story{% endif %}
+        </h2>
+        <p class="text-gray-600 leading-relaxed text-base mb-6">
+          {{ about_text }}
+        </p>
+
+        {% if feature_pills %}
+        <div class="flex flex-wrap gap-2">
+          {% for pill in feature_pills %}
+          <span class="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full"
+                style="background:color-mix(in srgb, var(--accent) 12%, transparent); color:var(--primary)">
+            ✔ {{ pill }}
+          </span>
           {% endfor %}
         </div>
+        {% endif %}
+      </div>
+
+      <!-- Accent visual panel -->
+      <div class="rounded-2xl p-8 flex flex-col justify-between min-h-[220px]"
+           style="background:var(--surface)">
+        <div>
+          <p class="text-4xl font-black mb-1" style="color:var(--accent)">
+            {% if rating %}{{ "%.1f"|format(rating|float) }}★{% else %}★★★★★{% endif %}
+          </p>
+          <p class="text-sm font-semibold text-gray-500 mb-4">
+            {% if reviews_count %}{{ reviews_count }} verified Google reviews{% else %}Google rating{% endif %}
+          </p>
+        </div>
+        {% if wa_url %}
+        <a href="{{ wa_url }}" target="_blank" rel="noopener"
+           class="inline-flex items-center gap-2 text-sm font-bold text-white rounded-full px-5 py-2.5 self-start transition-all hover:brightness-110"
+           style="background:#25D366">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z M12 0C5.373 0 0 5.373 0 12c0 2.107.549 4.09 1.508 5.814L.057 23.998l6.305-1.654A11.945 11.945 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.891 0-3.658-.506-5.186-1.389l-.371-.221-3.844 1.008 1.027-3.748-.242-.387A9.955 9.955 0 012 12c0-5.514 4.486-10 10-10s10 4.486 10 10-4.486 10-10 10z"/>
+          </svg>
+          Message us
+        </a>
+        {% endif %}
+      </div>
+
+    </div>
+  </div>
+</section>
+
+
+<!-- ══════════════════════════════════════════════
+     4 · WHAT PEOPLE LOVE
+══════════════════════════════════════════════ -->
+{% if what_people_love %}
+<section class="py-20 md:py-24 reveal" style="background:var(--surface)">
+  <div class="max-w-5xl mx-auto px-6 md:px-12">
+
+    <p class="text-xs font-extrabold tracking-widest uppercase mb-2" style="color:var(--accent)">Customer Favourite</p>
+    <h2 class="text-2xl md:text-3xl font-extrabold mb-8 tracking-tight" style="color:var(--primary)">
+      What people love about this place
+    </h2>
+
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      {% for item in what_people_love %}
+      <div class="flex items-center gap-3 bg-white rounded-xl px-4 py-3 shadow-sm border border-gray-100">
+        <span class="text-sm font-bold flex-shrink-0" style="color:var(--accent)">✔</span>
+        <span class="text-sm font-semibold text-gray-800">{{ item }}</span>
       </div>
       {% endfor %}
     </div>
@@ -414,45 +295,82 @@
 {% endif %}
 
 
-<!-- ════════════════════════════════════════════════════════════
-     SECTION 5 · REVIEWS
-════════════════════════════════════════════════════════════ -->
-{% if reviews %}
-<section class="py-20 md:py-24 reveal" style="background:var(--surface)">
-  <div class="max-w-page mx-auto px-6 md:px-12">
+<!-- ══════════════════════════════════════════════
+     5 · GALLERY (only if images exist)
+══════════════════════════════════════════════ -->
+{% if gallery_images %}
+<section class="py-20 md:py-24 bg-white reveal">
+  <div class="max-w-5xl mx-auto px-6 md:px-12">
 
-    <p class="text-xs font-extrabold tracking-widest uppercase mb-1" style="color:var(--accent)">Social Proof</p>
-    <h2 class="text-2xl md:text-3xl font-extrabold mb-8 tracking-tight" style="color:var(--primary)">What Customers Say</h2>
+    <p class="text-xs font-extrabold tracking-widest uppercase mb-2" style="color:var(--accent)">Our Space</p>
+    <h2 class="text-2xl md:text-3xl font-extrabold mb-8 tracking-tight" style="color:var(--primary)">
+      {% if "coffee" in category|lower or "cafe" in category|lower or "restaurant" in category|lower or "bakery" in category|lower %}
+        See the space
+      {% elif "salon" in category|lower or "barber" in category|lower or "spa" in category|lower %}
+        The experience
+      {% else %}
+        See us in action
+      {% endif %}
+    </h2>
 
-    <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-      {% for r in reviews[:6] %}
-      <div class="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm hover:shadow-md transition-shadow">
-        <!-- Header -->
-        <div class="flex items-center gap-3 mb-3">
-          <div class="w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0"
-               style="background: hsl({{ (loop.index * 73) % 360 }}, 48%, 40%)">
-            {{ r.author[0]|upper if r.author else "?" }}
-          </div>
-          <div class="min-w-0">
-            <p class="text-xs font-bold truncate" style="color:var(--primary)">{{ r.author }}</p>
-            <p class="stars text-xs">{% for i in range(r.rating|int) %}★{% endfor %}</p>
-          </div>
-        </div>
-        <!-- Quote -->
-        <p class="text-sm text-gray-600 leading-relaxed italic">
-          "{{ r.text[:200] }}{% if r.text|length > 200 %}…{% endif %}"
-        </p>
+    <div class="grid grid-cols-2 md:grid-cols-3 gap-2 md:gap-3">
+      {% for img in gallery_images[:8] %}
+      <div class="img-zoom rounded-xl overflow-hidden bg-gray-100
+                  {% if loop.index == 1 %}col-span-2 row-span-2{% endif %}">
+        <img src="{{ img }}" alt="{{ name }}" loading="lazy" referrerpolicy="no-referrer"
+             onerror="this.parentElement.style.display='none'"
+             class="w-full h-full object-cover
+                    {% if loop.index == 1 %}min-h-[240px] md:min-h-[320px]{% else %}aspect-square{% endif %}" />
       </div>
       {% endfor %}
     </div>
 
-    <!-- Link to all reviews -->
-    {% if google_maps_url and reviews_count %}
+  </div>
+</section>
+{% endif %}
+
+
+<!-- ══════════════════════════════════════════════
+     6 · REVIEWS
+══════════════════════════════════════════════ -->
+{% if reviews %}
+<section class="py-20 md:py-24 reveal" style="background:var(--surface)">
+  <div class="max-w-5xl mx-auto px-6 md:px-12">
+
+    <p class="text-xs font-extrabold tracking-widest uppercase mb-2" style="color:var(--accent)">Reviews</p>
+    <h2 class="text-2xl md:text-3xl font-extrabold mb-8 tracking-tight" style="color:var(--primary)">
+      What customers say
+    </h2>
+
+    <div class="grid sm:grid-cols-2 gap-4">
+      {% for r in reviews[:4] %}
+      <div class="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
+        <!-- Stars -->
+        <div class="stars text-base mb-3">
+          {% for i in range(r.rating|int) %}★{% endfor %}
+        </div>
+        <!-- Quote -->
+        <p class="text-gray-700 text-sm leading-relaxed mb-4 italic">
+          "{{ r.text[:240] }}{% if r.text|length > 240 %}…{% endif %}"
+        </p>
+        <!-- Author -->
+        <div class="flex items-center gap-2">
+          <div class="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
+               style="background: hsl({{ (loop.index * 97) % 360 }}, 45%, 42%)">
+            {{ r.author[0]|upper if r.author else "?" }}
+          </div>
+          <span class="text-xs font-semibold text-gray-500">{{ r.author }}</span>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+
+    {% if google_maps_url and reviews_count and reviews_count|int > 4 %}
     <div class="mt-6 text-center">
       <a href="{{ google_maps_url }}" target="_blank" rel="noopener"
-         class="inline-flex items-center gap-1.5 text-sm font-semibold hover:underline transition-opacity hover:opacity-70"
+         class="inline-flex items-center gap-1 text-sm font-semibold hover:underline"
          style="color:var(--accent)">
-        → Read all {{ reviews_count }} reviews on Google
+        Read all {{ reviews_count }} reviews on Google ↗
       </a>
     </div>
     {% endif %}
@@ -462,26 +380,26 @@
 {% endif %}
 
 
-<!-- ════════════════════════════════════════════════════════════
-     SECTION 6 · LOCATION + CTA
-════════════════════════════════════════════════════════════ -->
+<!-- ══════════════════════════════════════════════
+     7 · LOCATION
+══════════════════════════════════════════════ -->
 <section class="py-20 md:py-24 bg-white reveal" id="location">
-  <div class="max-w-page mx-auto px-6 md:px-12">
+  <div class="max-w-5xl mx-auto px-6 md:px-12">
 
-    <p class="text-xs font-extrabold tracking-widest uppercase mb-1" style="color:var(--accent)">Find Us</p>
-    <h2 class="text-2xl md:text-3xl font-extrabold mb-8 tracking-tight" style="color:var(--primary)">Visit Us or Message Us Instantly</h2>
+    <p class="text-xs font-extrabold tracking-widest uppercase mb-2" style="color:var(--accent)">Find Us</p>
+    <h2 class="text-2xl md:text-3xl font-extrabold mb-8 tracking-tight" style="color:var(--primary)">Where to find us</h2>
 
     <div class="grid md:grid-cols-2 gap-8 items-start">
 
-      <!-- Map -->
       {% if map_embed %}
-      <div class="rounded-2xl overflow-hidden shadow-sm border border-gray-100" style="aspect-ratio:4/3">
-        <iframe src="{{ map_embed }}" width="100%" height="100%" style="border:0" allowfullscreen loading="lazy"></iframe>
+      <div class="rounded-2xl overflow-hidden border border-gray-100 shadow-sm" style="aspect-ratio:4/3">
+        <iframe src="{{ map_embed }}" width="100%" height="100%"
+                style="border:0" allowfullscreen loading="lazy"
+                referrerpolicy="no-referrer-when-downgrade"></iframe>
       </div>
       {% endif %}
 
-      <!-- Info + CTA -->
-      <div class="flex flex-col gap-6">
+      <div class="flex flex-col gap-5">
 
         {% if address %}
         <div>
@@ -490,49 +408,19 @@
         </div>
         {% endif %}
 
-        {% if phone %}
-        <div>
-          <p class="text-[10px] font-extrabold tracking-widest uppercase mb-1" style="color:var(--accent)">Phone</p>
-          <a href="tel:{{ phone }}" class="text-sm font-bold" style="color:var(--primary)">{{ phone }}</a>
-        </div>
-        {% endif %}
-
         {% if google_maps_url %}
-        <div>
-          <p class="text-[10px] font-extrabold tracking-widest uppercase mb-1" style="color:var(--accent)">Directions</p>
-          <a href="{{ google_maps_url }}" target="_blank" rel="noopener"
-             class="text-sm font-semibold hover:underline" style="color:var(--primary)">
-            Open in Google Maps ↗
-          </a>
-        </div>
+        <a href="{{ google_maps_url }}" target="_blank" rel="noopener"
+           class="inline-flex items-center gap-1.5 text-sm font-semibold self-start px-4 py-2 rounded-lg border border-gray-200 text-gray-700 hover:border-gray-400 transition-colors">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/>
+          </svg>
+          Open in Google Maps
+        </a>
         {% endif %}
-
-        <!-- CTA box -->
-        <div class="rounded-2xl p-6 text-white mt-2" style="background:var(--primary)">
-          <p class="text-lg font-extrabold mb-1">Ready to visit?</p>
-          <p class="text-sm text-white/60 mb-1">Message us on WhatsApp — fast response, no booking needed.</p>
-          {% if cta_line %}
-          <p class="text-sm font-semibold text-white/80 mb-4">→ {{ cta_line }}</p>
-          {% else %}
-          <div class="mb-4"></div>
-          {% endif %}
-          {% if wa_url %}
-          <a href="{{ wa_url }}" target="_blank" rel="noopener"
-             class="inline-flex items-center gap-2 font-bold text-sm rounded-full px-6 py-3 text-white transition-all hover:brightness-110"
-             style="background:#25D366; box-shadow:0 4px 16px rgba(37,211,102,0.35)">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z M12 0C5.373 0 0 5.373 0 12c0 2.107.549 4.09 1.508 5.814L.057 23.998l6.305-1.654A11.945 11.945 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.891 0-3.658-.506-5.186-1.389l-.371-.221-3.844 1.008 1.027-3.748-.242-.387A9.955 9.955 0 012 12c0-5.514 4.486-10 10-10s10 4.486 10 10-4.486 10-10 10z"/></svg>
-            Send Message on WhatsApp
-          </a>
-          {% endif %}
-          <div class="flex items-center gap-4 mt-3 text-xs text-white/30">
-            <span>⚡ Fast response</span>
-            <span>📅 No booking needed</span>
-          </div>
-          <p class="text-xs text-white/25 mt-2">Takes less than 24 hours to set up</p>
-        </div>
 
       </div>
     </div>
+
   </div>
 </section>
 
@@ -540,42 +428,101 @@
 <!-- Footer -->
 <footer class="border-t border-gray-200 py-5 text-center text-xs text-gray-400" style="background:var(--surface)">
   © {{ name }}{% if city %} · {{ city }}{% endif %}
-  &nbsp;·&nbsp;
-  <a href="/" class="font-semibold hover:underline" style="color:var(--primary)">← Dashboard</a>
 </footer>
 
 
-<!-- ════════════════════════════════════════════════════════════
-     FLOATING WHATSAPP BUTTON
-════════════════════════════════════════════════════════════ -->
+<!-- ══════════════════════════════════════════════
+     8 · FLOATING WHATSAPP BUTTON
+══════════════════════════════════════════════ -->
 {% if wa_url %}
 <a href="{{ wa_url }}" target="_blank" rel="noopener"
-   class="wa-pulse fixed bottom-5 right-5 z-50 flex items-center gap-2 font-bold text-sm text-white rounded-full shadow-xl transition-all hover:scale-105 hover:brightness-110"
+   class="wa-fab fixed bottom-5 right-5 z-50 flex items-center gap-2 font-bold text-sm text-white rounded-full shadow-2xl transition-all hover:scale-105 active:scale-95"
    style="background:#25D366; padding:0.75rem 1.2rem">
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z M12 0C5.373 0 0 5.373 0 12c0 2.107.549 4.09 1.508 5.814L.057 23.998l6.305-1.654A11.945 11.945 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.891 0-3.658-.506-5.186-1.389l-.371-.221-3.844 1.008 1.027-3.748-.242-.387A9.955 9.955 0 012 12c0-5.514 4.486-10 10-10s10 4.486 10 10-4.486 10-10 10z"/></svg>
-  <span class="hidden sm:inline">Chat with us!</span>
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+    <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z M12 0C5.373 0 0 5.373 0 12c0 2.107.549 4.09 1.508 5.814L.057 23.998l6.305-1.654A11.945 11.945 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.891 0-3.658-.506-5.186-1.389l-.371-.221-3.844 1.008 1.027-3.748-.242-.387A9.955 9.955 0 012 12c0-5.514 4.486-10 10-10s10 4.486 10 10-4.486 10-10 10z"/>
+  </svg>
+  <span class="hidden sm:inline">Chat with us</span>
 </a>
 {% endif %}
 
 
-<script>
-  // ── Hero image scale-in on load ──────────────────────────────────────────
-  const heroImg = document.getElementById('heroImg');
-  if (heroImg) {
-    const activate = () => { heroImg.style.transform = 'scale(1)'; };
-    if (heroImg.complete && heroImg.naturalWidth > 0) activate();
-    else heroImg.addEventListener('load', activate);
-  }
+<!-- ══════════════════════════════════════════════
+     9 · SERVICES / MENU MODAL
+══════════════════════════════════════════════ -->
+{% if services %}
+<div id="modal-overlay" role="dialog" aria-modal="true" aria-label="Services" onclick="closeModalIfOverlay(event)">
+  <div id="modal-box">
 
-  // ── Scroll reveal ────────────────────────────────────────────────────────
+    <!-- Header -->
+    <div class="flex items-center justify-between mb-6">
+      <div>
+        <p class="text-xs font-extrabold tracking-widest uppercase mb-0.5" style="color:var(--accent)">
+          {% if "menu" in cta_label|lower %}Our Menu{% else %}Our Services{% endif %}
+        </p>
+        <h3 class="text-xl font-extrabold text-white">{{ name }}</h3>
+      </div>
+      <button onclick="closeModal()"
+              class="w-8 h-8 rounded-full flex items-center justify-center text-white/50 hover:text-white hover:bg-white/15 transition-colors text-lg font-bold"
+              aria-label="Close">✕</button>
+    </div>
+
+    <!-- Service list -->
+    <div class="space-y-3">
+      {% for service in services[:8] %}
+      <div class="flex items-start gap-3 py-3 border-b border-white/10 last:border-0">
+        <span class="w-1.5 h-1.5 rounded-full flex-shrink-0 mt-2" style="background:var(--accent)"></span>
+        <div>
+          <p class="text-sm font-semibold text-white">{{ service }}</p>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+
+    <!-- Modal CTA -->
+    {% if wa_url %}
+    <div class="mt-6 pt-5 border-t border-white/10">
+      <a href="{{ wa_url }}" target="_blank" rel="noopener"
+         class="flex items-center justify-center gap-2 font-bold text-sm text-white rounded-full px-6 py-3 w-full transition-all hover:brightness-110"
+         style="background:#25D366">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+          <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z M12 0C5.373 0 0 5.373 0 12c0 2.107.549 4.09 1.508 5.814L.057 23.998l6.305-1.654A11.945 11.945 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.891 0-3.658-.506-5.186-1.389l-.371-.221-3.844 1.008 1.027-3.748-.242-.387A9.955 9.955 0 012 12c0-5.514 4.486-10 10-10s10 4.486 10 10-4.486 10-10 10z"/>
+        </svg>
+        Chat to enquire on WhatsApp
+      </a>
+    </div>
+    {% endif %}
+
+  </div>
+</div>
+{% endif %}
+
+
+<script>
+  // ── Scroll reveal ───────────────────────────────────────────────────────────
   if ('IntersectionObserver' in window) {
     const io = new IntersectionObserver(entries => {
-      entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('on'); io.unobserve(e.target); } });
-    }, { threshold: 0.08, rootMargin: '0px 0px -28px 0px' });
+      entries.forEach(e => {
+        if (e.isIntersecting) { e.target.classList.add('on'); io.unobserve(e.target); }
+      });
+    }, { threshold: 0.06, rootMargin: '0px 0px -24px 0px' });
     document.querySelectorAll('.reveal').forEach(el => io.observe(el));
   } else {
     document.querySelectorAll('.reveal').forEach(el => el.classList.add('on'));
   }
+
+  // ── Services / Menu modal ───────────────────────────────────────────────────
+  function openModal() {
+    const overlay = document.getElementById('modal-overlay');
+    if (overlay) { overlay.classList.add('open'); document.body.style.overflow = 'hidden'; }
+  }
+  function closeModal() {
+    const overlay = document.getElementById('modal-overlay');
+    if (overlay) { overlay.classList.remove('open'); document.body.style.overflow = ''; }
+  }
+  function closeModalIfOverlay(e) {
+    if (e.target === document.getElementById('modal-overlay')) closeModal();
+  }
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
 </script>
 
 </body>

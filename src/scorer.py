@@ -1,23 +1,24 @@
 def filter_leads(leads: list[dict]) -> list[dict]:
     """
-    Remove leads that don't meet minimum quality thresholds.
-    Filters: rating < 4.2, reviews_count < 20, name contains 'closed'.
+    Minimal quality filter — only remove clearly junk entries.
+
+    Previous thresholds (rating < 4.2, reviews_count < 20) were too aggressive:
+    - Apify often returns rating=0.0 / reviews_count=0 when fields are missing,
+      causing ALL leads to be dropped before scoring even runs.
+    - The scoring function already rewards low-rating and low-review leads with
+      bonus points, so removing them here was counterproductive.
+
+    Kept: drop "permanently closed" businesses by name.
     """
     result = []
     for lead in leads:
-        rating = lead.get("rating") or 0
-        reviews_count = lead.get("reviews_count") or 0
         name = (lead.get("name") or "").lower()
-
-        if rating < 4.2:
-            continue
-        if reviews_count < 20:
-            continue
         if "closed" in name:
+            print(f"[Scorer] Filtered out (closed): {lead.get('name')}")
             continue
-
         result.append(lead)
 
+    print(f"[Scorer] filter_leads: {len(leads)} in → {len(result)} out")
     return result
 
 

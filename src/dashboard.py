@@ -471,6 +471,10 @@ async def render_demo(request: Request, slug: str):
     modules_cfg  = data.get("modules", {})    # {menu: bool}
     menu_enabled = bool(modules_cfg.get("menu", False) and menu_data)
 
+    # Best hero quote: prefer structured review_intel pick, fall back to short snippet
+    _ri = data.get("review_intel") or {}
+    hero_quote = _ri.get("top_review_quote", "") or hero_review
+
     return templates.TemplateResponse("demo.html", {
         "request":        request,
         "name":           name,
@@ -488,27 +492,22 @@ async def render_demo(request: Request, slug: str):
         "google_maps_url": data.get("google_maps_url", ""),
         "map_embed":      data.get("map_embed", ""),
         "wa_url":         wa_url,
-        "highlights":     _extract_highlights(reviews),
         # Branding
         "color_primary":  colors.get("primary", "#0D1520"),
         "color_accent":   colors.get("accent",  "#C9A96E"),
         "color_bg":       colors.get("bg",      "#F8F7F4"),
         "color_surface":  colors.get("surface", "#EDE8DE"),
+        "about_headline": data.get("about_headline", ""),
         "about_text":     data.get("about_text", ""),
         "feature_stat":   data.get("feature_stat", "Locally Loved"),
         "feature_pills":  data.get("feature_pills", []),
         "cta_label":      data.get("cta_label", "Get in Touch"),
         "promo":          data.get("promo", ""),
         "cta_line":       data.get("cta_line", ""),
-        "rating_badge":   data.get("rating_badge", ""),
         "hero_review":    hero_review,
-        # Diagnostic intelligence
-        "has_website":       data.get("has_website", False),
-        "website_status":    data.get("website_status", "unknown"),
-        "has_whatsapp":      data.get("has_whatsapp", False),
-        "strong_reviews":    data.get("strong_reviews", False),
-        "opportunity_score": data.get("opportunity_score", 0),
-        "opportunity_label": data.get("opportunity_label", "Low"),
+        "hero_quote":     hero_quote,
+        # Client-facing highlights
+        "what_people_love": data.get("what_people_love", []),
         # Menu module
         "menu_enabled":   menu_enabled,
         "menu":           menu_data or {},

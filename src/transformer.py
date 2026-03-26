@@ -23,6 +23,83 @@ from src.config import (
     INDUSTRY_CTA_LABEL, DEFAULT_CTA_LABEL,
 )
 
+# ── "What People Love" fallback phrases per category ─────────────────────────
+# Used when review intel extracts fewer than 4 items.
+_INDUSTRY_LOVE_FALLBACKS: dict[str, list[str]] = {
+    "coffee":      ["Excellent coffee", "Friendly staff", "Cosy atmosphere", "Great for breakfast", "Fast service"],
+    "cafe":        ["Excellent coffee", "Friendly staff", "Cosy atmosphere", "Great for breakfast", "Homemade food"],
+    "restaurant":  ["Delicious food", "Friendly staff", "Great atmosphere", "Good value for money", "Clean environment"],
+    "salon":       ["Expert styling", "Friendly staff", "Clean environment", "Great value", "Quick turnaround"],
+    "barbershop":  ["Precision cuts", "Friendly barbers", "Clean environment", "Honest pricing", "Quick service"],
+    "barber":      ["Precision cuts", "Friendly barbers", "Clean environment", "Honest pricing", "Quick service"],
+    "gym":         ["Expert trainers", "Modern equipment", "Motivating environment", "Flexible memberships", "Results-focused"],
+    "fitness":     ["Expert trainers", "Modern equipment", "Motivating environment", "All fitness levels", "Great community"],
+    "dentist":     ["Gentle approach", "Professional staff", "Modern equipment", "Pain-free experience", "Efficient service"],
+    "dental":      ["Gentle approach", "Professional staff", "Modern equipment", "Pain-free experience", "Quick appointments"],
+    "spa":         ["Relaxing experience", "Skilled therapists", "Clean environment", "Great value", "Perfect atmosphere"],
+    "bakery":      ["Fresh daily baking", "Delicious pastries", "Friendly service", "Great coffee", "Homemade quality"],
+    "mechanic":    ["Honest advice", "Fast turnaround", "Fair pricing", "Skilled mechanics", "Reliable service"],
+    "auto":        ["Honest advice", "Fast turnaround", "Fair pricing", "Skilled mechanics", "Reliable service"],
+    "hotel":       ["Comfortable rooms", "Friendly staff", "Great location", "Clean environment", "Good breakfast"],
+    "lodge":       ["Beautiful setting", "Friendly hosts", "Peaceful atmosphere", "Great breakfast", "Excellent value"],
+    "guest":       ["Comfortable rooms", "Friendly hosts", "Homemade breakfast", "Secure parking", "Relaxed atmosphere"],
+    "cleaning":    ["Thorough cleaning", "Reliable service", "Friendly team", "Great value", "Professional results"],
+    "plumber":     ["Fast response", "Honest pricing", "Reliable service", "Professional work", "Available when needed"],
+    "electrician": ["Fast response", "Safe installations", "Honest pricing", "Reliable service", "Professional work"],
+    "florist":     ["Beautiful arrangements", "Friendly staff", "Creative designs", "Fresh flowers", "Great value"],
+}
+_DEFAULT_LOVE_FALLBACKS = [
+    "Professional service", "Friendly team", "Reliable and trustworthy",
+    "Great value for money", "Quality results",
+]
+
+
+def _build_what_people_love(
+    review_intel: dict, category: str, industry: str
+) -> list[str]:
+    """
+    Build the 'What People Love' list (max 10 items).
+    Priority: review highlights → experience tags → signature items → fallbacks.
+    Always returns at least 4 items.
+    """
+    items: list[str] = []
+    seen: set[str] = set()
+
+    def _add(phrase: str) -> None:
+        p = phrase.strip()
+        if p and p.lower() not in seen and len(items) < 10:
+            items.append(p)
+            seen.add(p.lower())
+
+    for h in (review_intel.get("top_highlights") or []):
+        _add(h)
+    for t in (review_intel.get("experience_tags") or []):
+        _add(t)
+    if len(items) < 6:
+        for s in (review_intel.get("signature_items") or []):
+            _add(s)
+
+    if len(items) < 4:
+        cat = (category or "").lower()
+        ind = (industry or "").lower()
+        fallbacks = None
+        for key, vals in _INDUSTRY_LOVE_FALLBACKS.items():
+            if key in cat:
+                fallbacks = vals
+                break
+        if not fallbacks:
+            for key, vals in _INDUSTRY_LOVE_FALLBACKS.items():
+                if key in ind:
+                    fallbacks = vals
+                    break
+        for fb in (fallbacks or _DEFAULT_LOVE_FALLBACKS):
+            if len(items) >= 4:
+                break
+            _add(fb)
+
+    return items[:10]
+
+
 # ── Reliable category fallback images (images.unsplash.com CDN — permanent) ──
 _FALLBACK_IMAGES: dict[str, list[str]] = {
     "coffee":     [
@@ -242,6 +319,7 @@ def build_business_data(lead: dict, industry: str) -> dict:
     # Pure frequency-based extraction — no API, no fabrication.
     # Extracts highlights, signature items, and experience tags from real text.
     review_intel = extract_review_intel(reviews)
+    what_people_love = _build_what_people_love(review_intel, category, industry)
 
     # ── MAP EMBED ────────────────────────────────────────────────────────────
     # Use coords if available, otherwise fall back to address search
@@ -389,6 +467,9 @@ def build_business_data(lead: dict, industry: str) -> dict:
         "ai_generated":   bool(ai),        # flag: True when AI copy was used
         # Review intelligence (frequency-based, no fabrication)
         "review_intel":   review_intel,
+        # Condensed highlights for client-facing demo
+        "what_people_love": what_people_love,
+        "about_headline": about_headline,
         # Diagnostic / opportunity intelligence
         "has_website":        has_website,
         "website_url":        website_url,

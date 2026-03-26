@@ -19,30 +19,39 @@ def run_pipeline(industry: str, location: str) -> list[dict]:
     4. Save to CSV + latest.json (including raw-vs-filtered stats)
     Returns scored lead list.
     """
-    print(f"\n[Pipeline] Starting: '{industry}' in '{location}'")
+    print(f"\n[Pipeline] ── START ── '{industry}' in '{location}'")
 
+    # ── Step 1: Fetch ──────────────────────────────────────────────────────
     leads = fetch_leads(industry, location)
-    # Capture stats set by the fetcher
     filter_stats = dict(_fetcher_mod._last_fetch_stats)
 
     raw_count = filter_stats.get("raw", len(leads))
-    print(f"[Pipeline] Raw leads: {raw_count}")
+    print(f"[Pipeline] Raw fetched:    {raw_count}")
+    print(f"[Pipeline] After dedup:    {len(leads)}")
 
     if not leads:
-        print("[Pipeline] Returned leads: 0")
-        print("[Pipeline] No leads returned from Apify.")
+        print("[Pipeline] ✗ No leads returned from fetcher — aborting.")
         return []
 
+    # ── Step 2: Score (includes internal quality filter) ──────────────────
+    leads_before_scoring = len(leads)
     leads = score_leads(leads)
+    print(f"[Pipeline] After scoring:  {len(leads)}  (filtered from {leads_before_scoring})")
 
+    if not leads:
+        print("[Pipeline] ✗ All leads were removed by scorer filter — check scorer.py thresholds.")
+        return []
+
+    # ── Step 3: Slugify ───────────────────────────────────────────────────
     for lead in leads:
         lead["slug"] = slugify(lead["name"])
 
-    print(f"[Pipeline] Returned leads: {len(leads)}")
-
+    # ── Step 4: Save ──────────────────────────────────────────────────────
+    from src.config import OUTPUT_DIR
+    print(f"[Pipeline] Saving to:      {OUTPUT_DIR}")
     csv_path  = save_leads(leads, industry, location)
     json_path = save_leads_json(leads, industry, location, filter_stats=filter_stats)
-    print(f"[Pipeline] Saved {len(leads)} leads → {csv_path}")
-    print(f"[Pipeline] Latest JSON → {json_path}")
-    print("[Pipeline] Done. Demos are generated on-demand per lead.\n")
+    print(f"[Pipeline] Save complete:  {len(leads)} leads → {csv_path}")
+    print(f"[Pipeline] Latest JSON:    {json_path}")
+    print(f"[Pipeline] ── DONE ── {len(leads)} leads ready for display\n")
     return leads

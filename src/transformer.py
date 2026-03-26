@@ -263,23 +263,22 @@ def get_industry_pack(category: str) -> str:
 
 def build_accommodation_hero(name: str, location: str, review_intel: dict) -> str:
     """
-    Build a review-driven hero description for accommodation businesses.
-    Uses the top review highlights to make the line specific, not generic.
+    Build a review-driven hero line for accommodation businesses.
+    Short, human, specific — uses real highlights where available.
     """
     highlights = review_intel.get("top_highlights") or []
     tags       = review_intel.get("experience_tags") or []
 
-    # Prefer the first two real highlights if available
     combined = [h.lower() for h in (highlights + tags) if h]
     if len(combined) >= 2:
         theme = f"{combined[0]} and {combined[1]}"
     elif len(combined) == 1:
         theme = combined[0]
     else:
-        theme = "comfortable stays and friendly hospitality"
+        theme = "clean rooms and friendly hospitality"
 
     loc = location or "the area"
-    return f"A well-rated guest house in {loc} known for {theme}."
+    return f"Comfortable stays in {loc}, known for {theme}."
 
 
 def build_business_data(lead: dict, industry: str) -> dict:
@@ -321,9 +320,9 @@ def build_business_data(lead: dict, industry: str) -> dict:
 
     if photos:
         hero_image     = photos[0]
-        gallery_images = list(photos[1:7])   # real photos only — no padding
+        gallery_images = list(photos[:6])    # best photos first (Google sorts by quality)
     else:
-        hero_image     = fallbacks[0]        # single fallback for hero backdrop
+        hero_image     = ""                  # no real photo → CSS brand-colour background
         gallery_images = []                  # no gallery without real photos
 
     # show_gallery is the flag the template checks — never True without real photos
@@ -359,7 +358,9 @@ def build_business_data(lead: dict, industry: str) -> dict:
     # Pure frequency-based extraction — no API, no fabrication.
     # Extracts highlights, signature items, and experience tags from real text.
     review_intel = extract_review_intel(reviews)
-    what_people_love = _build_what_people_love(review_intel, category, industry)
+    _love_raw    = _build_what_people_love(review_intel, category, industry)
+    # Cap at 4, capitalize each item — short phrases only, no sentences
+    what_people_love = [item.capitalize() for item in _love_raw[:4]]
 
     # ── HERO DESCRIPTION (pack-specific) ─────────────────────────────────────
     # Accommodation: review-driven one-liner using real highlights.
@@ -489,7 +490,7 @@ def build_business_data(lead: dict, industry: str) -> dict:
         "category":       category,
         "google_maps_url": google_maps_url,
         "place_id":       place_id,
-        # Images (real first, Unsplash fallback for hero only)
+        # Images (real Google photos only — empty string when none available)
         "hero_image":     hero_image,
         "gallery_images": gallery_images,
         "has_real_photos": has_photos,

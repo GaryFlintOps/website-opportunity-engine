@@ -94,13 +94,20 @@
 
     <!-- Rating -->
     {% if rating %}
-    <div class="flex items-center gap-2 mb-5">
+    <div class="flex items-center gap-2 mb-3">
       <span class="stars text-base font-bold">★★★★★</span>
       <span class="text-white font-bold text-sm">{{ "%.1f"|format(rating|float) }}</span>
       {% if reviews_count %}
       <span class="text-white/50 text-sm">({{ reviews_count }} reviews)</span>
       {% endif %}
     </div>
+    {% endif %}
+
+    <!-- Trust anchor — credibility without clutter -->
+    {% if city %}
+    <p class="text-xs text-white/40 font-medium tracking-wide mb-5">
+      Trusted by {% if industry_pack == "accommodation" %}guests{% else %}customers{% endif %} in {{ city }}
+    </p>
     {% endif %}
 
     <!-- Best review quote -->
@@ -127,12 +134,15 @@
       </a>
       {% endif %}
 
-      {% if services %}
+      {# For accommodation: only show room/services button when there is real data.
+         Generic static service lists ("Double Room", etc.) are not specific enough
+         to surface — WhatsApp is the only CTA until real room data is available. #}
+      {% if services and industry_pack != "accommodation" %}
       <button onclick="openModal()"
               class="inline-flex items-center gap-2 font-semibold text-sm rounded-full px-6 py-3
                      text-white border-2 border-white/35 backdrop-blur-sm
                      transition-all hover:bg-white/15 active:scale-95">
-        {% if industry_pack == "accommodation" %}View Rooms{% else %}View Services{% endif %} ↗
+        View Services ↗
       </button>
       {% endif %}
     </div>
@@ -218,22 +228,25 @@
       What {% if industry_pack == "accommodation" %}guests{% else %}customers{% endif %} say
     </h2>
 
-    <div class="grid gap-4
-      {% if reviews|length == 1 %}grid-cols-1 max-w-md
+    <div class="grid gap-8
+      {% if reviews|length == 1 %}grid-cols-1 max-w-lg
       {% elif reviews|length == 2 %}sm:grid-cols-2
       {% else %}sm:grid-cols-3{% endif %}">
       {% for r in reviews %}
-      <div class="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
-        <div class="stars text-base mb-3">★★★★★</div>
-        <p class="text-gray-700 text-sm leading-relaxed mb-4 italic">
-          "{{ r.text[:280] }}{% if r.text|length > 280 %}…{% endif %}"
+      <div class="flex flex-col">
+        <!-- Stars -->
+        <div class="stars text-sm mb-3 tracking-widest">★★★★★</div>
+        <!-- Review text — large, no card border -->
+        <p class="text-gray-800 text-base leading-relaxed italic flex-1 mb-4">
+          "{{ r.text[:240] }}{% if r.text|length > 240 %}…{% endif %}"
         </p>
-        <div class="flex items-center gap-2">
-          <div class="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
+        <!-- Author -->
+        <div class="flex items-center gap-2 pt-3 border-t border-gray-100">
+          <div class="w-6 h-6 rounded-full flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0"
                style="background: hsl({{ (loop.index * 97) % 360 }}, 45%, 42%)">
             {{ r.author[0]|upper if r.author else "?" }}
           </div>
-          <span class="text-xs font-semibold text-gray-500">{{ r.author }}</span>
+          <span class="text-xs font-semibold text-gray-400">{{ r.author }}</span>
         </div>
       </div>
       {% endfor %}

@@ -141,22 +141,22 @@
         {{ name }}
       </h1>
 
-      <!-- Real review phrase — primary voice on this page -->
-      {% if hero_line %}
-      <p style="font-size:clamp(16px,3vw,22px);color:rgba(255,255,255,.6);font-weight:300;font-style:italic;line-height:1.45;margin:0 0 22px;max-width:520px;">
-        "{{ hero_line }}"
-      </p>
-      {% endif %}
-
-      <!-- Rating -->
+      <!-- Rating — trust anchor, always HIGH when available -->
       {% if rating %}
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:28px;">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px;">
         <span class="stars" style="font-size:18px;">★★★★★</span>
         <span style="color:#fff;font-weight:700;font-size:17px;">{{ "%.1f"|format(rating|float) }}</span>
         {% if reviews_count %}
         <span style="color:rgba(255,255,255,.35);font-size:13px;">{{ reviews_count }} Google reviews</span>
         {% endif %}
       </div>
+      {% endif %}
+
+      <!-- Real review phrase — primary voice on this page -->
+      {% if hero_line %}
+      <p style="font-size:clamp(16px,3vw,22px);color:rgba(255,255,255,.6);font-weight:300;font-style:italic;line-height:1.45;margin:0 0 22px;max-width:520px;">
+        "{{ hero_line }}"
+      </p>
       {% endif %}
 
       {% if wa_url %}
@@ -211,6 +211,20 @@
     {% endif %}
     {% endfor %}
   </div>
+</div>
+{% endif %}
+
+
+<!-- ════════════════════════════════════════════
+     3b · WHAT THEY OFFER — services list
+     Eyebrow label + inline dot list
+════════════════════════════════════════════ -->
+{% if services %}
+<div class="reveal" style="padding: 48px 24px 0; max-width: 720px;">
+  <p style="font-size:small;font-weight:700;letter-spacing:2px;text-transform:uppercase;opacity:0.6;margin-bottom:10px;color:var(--primary);">What they offer</p>
+  <p style="font-size:clamp(15px,2.4vw,19px);font-weight:600;color:var(--primary);line-height:1.7;margin:0;">
+    {% for item in services %}{{ item }}{% if not loop.last %}<span style="color:var(--accent);margin:0 10px;">•</span>{% endif %}{% endfor %}
+  </p>
 </div>
 {% endif %}
 

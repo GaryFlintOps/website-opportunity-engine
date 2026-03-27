@@ -519,6 +519,8 @@ async def render_demo(request: Request, slug: str):
         # Signal-based fields (real review text extraction)
         "hero_line":        data.get("hero_line") or data.get("hero_description", ""),
         "review_phrases":   data.get("review_phrases", []),
+        # Image mode: "real" | "mixed" | "fallback" (template uses to mute fallbacks)
+        "image_mode":       data.get("image_mode", "real"),
         # Menu module
         "menu_enabled":   menu_enabled,
         "menu":           menu_data or {},

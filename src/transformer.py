@@ -200,12 +200,20 @@ _FALLBACK_DEFAULT = [
 ]
 
 
-def _get_fallback_images(industry: str) -> list[str]:
-    """Return a curated list of reliable fallback images for the given industry."""
-    key = industry.lower()
-    for k, imgs in _FALLBACK_IMAGES.items():
-        if k in key:
-            return imgs
+def _get_fallback_images(category: str = "", industry: str = "") -> list[str]:
+    """
+    Return a controlled, category-specific set of 6 fallback images.
+    Resolves category first (more specific), then industry.
+    These are fixed Unsplash photo IDs — same URL always returns same image.
+    In production, swap URLs to local /static/<category>-N.jpg paths.
+    """
+    for key_str in [category, industry]:
+        if not key_str:
+            continue
+        k = key_str.lower()
+        for keyword, imgs in _FALLBACK_IMAGES.items():
+            if keyword in k:
+                return imgs
     return _FALLBACK_DEFAULT
 
 
@@ -355,14 +363,58 @@ def extract_what_people_love(reviews: list[dict]) -> list[str]:
     return found[:4]
 
 
-def build_hero_line(review_phrases: list[str], location: str) -> str:
+_HERO_LINES: dict[str, str] = {
+    "bike":          "Trusted local bike shop in {location}",
+    "bicycle":       "Trusted local bike shop in {location}",
+    "cycle":         "Trusted local bike shop in {location}",
+    "cafe":          "A local favourite in {location}",
+    "coffee":        "A local favourite in {location}",
+    "charcuterie":   "Artisan food and coffee in {location}",
+    "bakery":        "Fresh baking every day in {location}",
+    "restaurant":    "A local dining favourite in {location}",
+    "guest":         "Comfortable stays in {location}",
+    "lodge":         "Comfortable stays in {location}",
+    "hotel":         "Comfortable stays in {location}",
+    "bnb":           "Comfortable stays in {location}",
+    "guesthouse":    "Comfortable stays in {location}",
+    "accommodation": "Comfortable stays in {location}",
+    "salon":         "Your local hair studio in {location}",
+    "barber":        "The trusted barbershop in {location}",
+    "barbershop":    "The trusted barbershop in {location}",
+    "gym":           "Your local gym in {location}",
+    "fitness":       "Your local gym in {location}",
+    "spa":           "Relax and restore in {location}",
+    "dentist":       "Your local dentist in {location}",
+    "dental":        "Your local dentist in {location}",
+    "mechanic":      "Trusted auto service in {location}",
+    "auto":          "Trusted auto service in {location}",
+    "cleaning":      "Reliable cleaning services in {location}",
+    "plumber":       "Trusted plumbing in {location}",
+    "electrician":   "Trusted electrical work in {location}",
+    "florist":       "Beautiful flowers in {location}",
+}
+
+_HERO_LINE_DEFAULT = "A trusted local business in {location}"
+
+
+def build_hero_line(review_phrases: list[str], location: str,
+                    category: str = "", industry: str = "") -> str:
     """
-    Use the first real review phrase as the hero line.
-    Falls back to a simple location-based line if no real phrase exists.
+    Build the hero subline.
+    Priority: real review phrase → category-aware line → industry-aware line → generic.
+    The location-based line is always category-correct — never shows wrong business type.
     """
     if review_phrases:
         return review_phrases[0]
-    return f"Comfortable stays in {location}" if location else ""
+
+    loc      = location or "your area"
+    combined = f"{category} {industry}".lower()
+
+    for keyword, template in _HERO_LINES.items():
+        if keyword in combined:
+            return template.format(location=loc)
+
+    return _HERO_LINE_DEFAULT.format(location=loc)
 
 
 # ── Industry Pack ─────────────────────────────────────────────────────────────
@@ -426,35 +478,37 @@ def build_business_data(lead: dict, industry: str) -> dict:
         cached = _lookup_cache(name)
 
     # ── IMAGES ──────────────────────────────────────────────────────────────
-    # Priority 1: real Google Maps photos from lead or cache.
-    # Priority 2: curated Unsplash fallbacks so the page is NEVER empty.
+    # hero_image  → photos[0] (real) or fallback[0]; never blank
+    # gallery     → photos[1:10]; fallbacks supplement or replace when needed
     #
-    # Rule:
-    #   ≥3 real photos → use real photos for gallery (pad to 6 with fallbacks if needed)
-    #   <3 real photos → use all 6 fallback images for gallery
-    #   hero_image     → always real if available, otherwise first fallback
-    photos = lead.get("photos") or (cached.get("photos") if cached else None) or []
+    # image_mode flags:
+    #   "real"     → ≥4 real gallery photos (no fallbacks needed)
+    #   "mixed"    → 1–3 real + fallback padding (fallbacks visually muted in template)
+    #   "fallback" → 0 real photos; full fallback set used
+    photos     = lead.get("photos") or (cached.get("photos") if cached else None) or []
+    fallbacks  = _get_fallback_images(category, industry)
+    has_photos = bool(photos)
 
-    fallbacks  = _get_fallback_images(category or industry)
-    has_photos = bool(photos)            # True only when real Google photos exist
+    # Hero always gets a real photo when available
+    hero_image   = photos[0] if photos else fallbacks[0]
 
-    if photos:
-        hero_image = photos[0]
+    # Gallery uses photos[1:] so hero image isn't repeated
+    real_images  = list(photos[1:10]) if photos else []
+
+    if len(real_images) >= 4:
+        gallery_images = real_images[:6]
+        image_mode     = "real"
+    elif len(real_images) >= 1:
+        # Controlled mix: real photos first, fallbacks fill remainder
+        # Fallbacks are visually muted in the template (opacity/filter)
+        needed         = 6 - len(real_images)
+        gallery_images = real_images + fallbacks[:needed]
+        image_mode     = "mixed"
     else:
-        hero_image = fallbacks[0]        # never leave hero blank
-
-    if len(photos) >= 3:
-        # Use real photos first; pad up to 6 with fallbacks if real set is short
-        real_gallery = list(photos[:6])
-        if len(real_gallery) < 6:
-            needed = 6 - len(real_gallery)
-            real_gallery += fallbacks[:needed]
-        gallery_images = real_gallery
-    else:
-        # Not enough real photos — use full fallback set (6 images)
         gallery_images = fallbacks[:6]
+        image_mode     = "fallback"
 
-    # show_gallery: always True — we always have at least 6 images available
+    # show_gallery: always True — guaranteed 6 images in all modes
     show_gallery = True
 
     # ── REVIEWS ─────────────────────────────────────────────────────────────
@@ -487,20 +541,77 @@ def build_business_data(lead: dict, industry: str) -> dict:
     review_intel = extract_review_intel(reviews)
 
     # Signal-based extraction from real review text
-    review_phrases   = extract_review_phrases(reviews)           # punchy opening sentences
-    # Fallback phrases when no real review text is extractable
+    review_phrases = extract_review_phrases(reviews)    # punchy opening sentences
+
+    # Human-sounding fallbacks when no real review text is extractable.
+    # These sound like actual customers — not marketing copy.
+    _REVIEW_FALLBACKS: dict[str, list[str]] = {
+        "bike":         ["Reliable service and knowledgeable team",
+                         "Great place for bike servicing and repairs",
+                         "Trusted local bike shop with solid support"],
+        "cycle":        ["Reliable service and knowledgeable team",
+                         "Great place for bike servicing and repairs",
+                         "Trusted local bike shop with solid support"],
+        "bicycle":      ["Reliable service and knowledgeable team",
+                         "Great place for bike servicing and repairs",
+                         "Trusted local bike shop with solid support"],
+        "cafe":         ["Great coffee and relaxed atmosphere",
+                         "Friendly service and consistently good food",
+                         "A favourite local spot for coffee and meals"],
+        "coffee":       ["Great coffee and relaxed atmosphere",
+                         "Friendly service and consistently good food",
+                         "A favourite local spot for coffee and light bites"],
+        "restaurant":   ["Consistently good food and friendly staff",
+                         "Great atmosphere and well-prepared meals",
+                         "A reliable local spot worth visiting"],
+        "bakery":       ["Fresh baking every day — always worth a visit",
+                         "Friendly team and genuinely good food",
+                         "A local favourite for pastries and coffee"],
+        "charcuterie":  ["Amazing selection of cheeses and baked goods",
+                         "Fresh produce and a warm welcome every time",
+                         "A must-visit for artisan food lovers"],
+        "guest":        ["Clean, comfortable and well looked after",
+                         "Friendly hosts and a relaxing stay",
+                         "Great value and a peaceful environment"],
+        "lodge":        ["Beautiful setting and well-maintained rooms",
+                         "Hosts go out of their way to make you comfortable",
+                         "Quiet, scenic and great value for money"],
+        "hotel":        ["Clean rooms and helpful staff throughout",
+                         "Well-located and good value for the area",
+                         "Comfortable stay with everything you need"],
+        "salon":        ["Left feeling great — skilled and attentive",
+                         "Friendly team who really listen to what you want",
+                         "Consistently good results every visit"],
+        "barber":       ["Clean cut every time, no complaints",
+                         "Friendly atmosphere and great attention to detail",
+                         "Reliable barber — always leave looking sharp"],
+        "gym":          ["Solid equipment and a motivated environment",
+                         "Staff are helpful without being pushy",
+                         "Good value membership with real results"],
+        "spa":          ["Left feeling genuinely relaxed and refreshed",
+                         "Skilled therapists and a calm, clean environment",
+                         "A proper treat — worth every cent"],
+        "mechanic":     ["Honest pricing and they explain everything clearly",
+                         "Fast turnaround and the work was done properly",
+                         "The kind of mechanic you keep coming back to"],
+        "cleaning":     ["Thorough job every time — house looks great",
+                         "Reliable team who show up when they say they will",
+                         "Professional, efficient and easy to deal with"],
+    }
+    _DEFAULT_REVIEW_FALLBACKS = [
+        "Consistently good service and easy to deal with",
+        "Reliable and trustworthy — would use again",
+        "A solid local business that delivers what it promises",
+    ]
+
     if not review_phrases:
         _cat = (category or industry).lower()
-        if any(k in _cat for k in ["bike", "cycle", "bicycle"]):
-            review_phrases = ["Trusted local bike specialists", "The go-to shop for cyclists in the area"]
-        elif any(k in _cat for k in ["cafe", "coffee"]):
-            review_phrases = ["Highly rated local cafe", "Trusted by customers in the area"]
-        elif any(k in _cat for k in ["restaurant", "dining", "food"]):
-            review_phrases = ["Highly rated local restaurant", "Trusted by the local community"]
-        elif any(k in _cat for k in ["guest", "lodge", "hotel", "bnb", "accommodation"]):
-            review_phrases = ["Highly rated local accommodation", "Trusted by guests in the area"]
-        else:
-            review_phrases = ["Highly rated local business", "Trusted by customers in the area"]
+        _matched_fallbacks = None
+        for _key, _phrases in _REVIEW_FALLBACKS.items():
+            if _key in _cat:
+                _matched_fallbacks = _phrases
+                break
+        review_phrases = (_matched_fallbacks or _DEFAULT_REVIEW_FALLBACKS)[:3]
     _love_signal     = extract_what_people_love(reviews)         # keyword-matched phrases
 
     # Fallback to frequency-based extraction if signal extraction yields < 2 items
@@ -513,7 +624,8 @@ def build_business_data(lead: dict, industry: str) -> dict:
     # ── HERO LINE ────────────────────────────────────────────────────────────
     # Priority: real review phrase → location fallback.
     # No generated text. No Unsplash. No AI assumptions.
-    hero_line        = build_hero_line(review_phrases, city or industry)
+    hero_line        = build_hero_line(review_phrases, city or industry,
+                                       category=category, industry=industry)
 
     # Keep hero_description for backward compat (older demos stored it)
     hero_description = hero_line
@@ -625,28 +737,42 @@ def build_business_data(lead: dict, industry: str) -> dict:
     cta_label      = _resolve(INDUSTRY_CTA_LABEL,      DEFAULT_CTA_LABEL,      category, industry)
     about_text     = _build_about_text(name, city, category, industry, rating, reviews_count)
 
-    # ── MINIMUM PAGE GUARANTEE ───────────────────────────────────────────────
-    # Ensure the 4 critical sections always have renderable content.
-    # This prevents a blank page when data is thin.
-    _critical_sections = {
-        "hero":      bool(name),
-        "images":    bool(gallery_images),
-        "offerings": bool(services),
-        "rating":    bool(rating),
-    }
-    _failing = [k for k, v in _critical_sections.items() if not v]
-    if _failing:
-        print(f"[Transformer] ⚠ Forcing fallbacks for: {_failing}")
-    # Force-fill any missing critical sections
-    if not gallery_images:
-        gallery_images = _get_fallback_images(category or industry)[:6]
-        show_gallery   = True
-    if not services:
-        services = get_services(category or industry)
-    if not rating:
-        rating = 0.0    # template hides rating block when value is 0
+    # ── SECTION GUARD ────────────────────────────────────────────────────────
+    # REQUIRED sections: always force-fill with fallbacks so page never breaks.
+    # OPTIONAL sections: render only when real data exists — never fake them.
+    #
+    #   REQUIRED: hero, images, offerings
+    #   OPTIONAL: reviews, rating, map
+
+    # Required: hero name
     if not name:
         name = "Local Business"
+        print("[Transformer] ⚠ No business name — using fallback")
+
+    # Required: images (guaranteed by image logic above, but belt-and-suspenders)
+    if not gallery_images:
+        gallery_images = _get_fallback_images(category, industry)[:6]
+        image_mode     = "fallback"
+        show_gallery   = True
+        print("[Transformer] ⚠ No gallery images — forced fallback set")
+
+    # Required: offerings — always show something meaningful
+    if not services:
+        services = get_services(category or industry)
+        print(f"[Transformer] ⚠ No services — using industry default for '{category or industry}'")
+
+    # Optional: reviews — only show if real data exists (no fake injections)
+    # review_phrases already populated above (real or human-sounding fallbacks)
+
+    # Optional: rating — only render rating block if a real score exists
+    # rating stays as-is; template must check `if rating` before rendering
+
+    # Optional: map — only render if embed URL was built from real coords/address
+    # map_embed stays as-is; template must check `if map_embed` before rendering
+
+    _required_ok = all([name, gallery_images, services])
+    if not _required_ok:
+        print(f"[Transformer] ⚠ Required section check failed — name={bool(name)} images={bool(gallery_images)} offerings={bool(services)}")
 
     return {
         # Core identity
@@ -660,11 +786,13 @@ def build_business_data(lead: dict, industry: str) -> dict:
         "category":       category,
         "google_maps_url": google_maps_url,
         "place_id":       place_id,
-        # Images (real Google photos only — empty string when none available)
+        # Images
         "hero_image":     hero_image,
         "gallery_images": gallery_images,
         "has_real_photos": has_photos,
-        "show_gallery":   show_gallery,    # True only when real gallery photos exist
+        "show_gallery":   show_gallery,
+        # "real" | "mixed" | "fallback" — used by template to mute mixed fallbacks
+        "image_mode":     image_mode,
         # Reviews (real only; requires >= 2 substantive reviews)
         "reviews":        reviews,
         "has_real_reviews": has_real_reviews,

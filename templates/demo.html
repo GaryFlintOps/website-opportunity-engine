@@ -29,51 +29,50 @@
 
     /* ── Hero ── */
     @keyframes hero-zoom {
-      from { transform: scale(1.06); }
+      from { transform: scale(1.08); }
       to   { transform: scale(1.00); }
     }
-    #hero-bg { animation: hero-zoom 10s ease-out forwards; }
+    #hero-bg { animation: hero-zoom 14s ease-out forwards; }
 
     /* ── Image strip ── */
     .img-strip {
       display: flex;
-      gap: 10px;
+      align-items: flex-start;
+      gap: 0;
       overflow-x: auto;
-      scroll-snap-type: x mandatory;
       scrollbar-width: none;
       -webkit-overflow-scrolling: touch;
-      padding: 0 24px;
+      padding: 0 0 0 24px;
     }
-    @media (min-width: 768px) { .img-strip { padding: 0 48px; } }
+    @media (min-width: 768px) { .img-strip { padding: 0 0 0 48px; } }
     .img-strip::-webkit-scrollbar { display: none; }
     .strip-img {
       flex-shrink: 0;
-      scroll-snap-align: start;
-      border-radius: 16px;
       object-fit: cover;
       display: block;
     }
 
     /* ── Review wall ── */
     .quote-large {
-      font-size: clamp(22px, 4.5vw, 38px);
+      font-size: clamp(30px, 6vw, 52px);
       font-weight: 300;
       font-style: italic;
-      line-height: 1.25;
-      letter-spacing: -.02em;
+      line-height: 1.18;
+      letter-spacing: -.03em;
       color: var(--primary);
-      margin: 0 0 28px;
+      margin: 0 0 72px;
     }
-    .quote-small {
-      font-size: clamp(15px, 2.8vw, 22px);
+    /* quote-isolated: a single phrase with a lot of air around it */
+    .quote-isolated {
+      font-size: clamp(18px, 3vw, 28px);
       font-weight: 300;
       font-style: italic;
-      line-height: 1.4;
-      color: rgba(0,0,0,0.45);
-      margin: 0 0 28px;
-      padding-left: 28px;
+      line-height: 1.5;
+      color: rgba(0,0,0,0.38);
+      margin: 0;
+      padding-left: 44px;
     }
-    @media (min-width: 768px) { .quote-small { padding-left: 56px; } }
+    @media (min-width: 768px) { .quote-isolated { padding-left: 80px; } }
 
     /* ── Attribution reviews ── */
     .review-quote {
@@ -123,46 +122,46 @@
        style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center;" />
   {% endif %}
 
-  <!-- Gradient: heavy at bottom, clear at top -->
-  <div style="position:absolute;inset:0;background:linear-gradient(to top, rgba(0,0,0,.96) 0%, rgba(0,0,0,.5) 45%, rgba(0,0,0,.08) 100%);pointer-events:none;"></div>
-  <!-- Subtle dot texture -->
-  <div style="position:absolute;inset:0;background-image:radial-gradient(rgba(255,255,255,.035) 1px,transparent 1px);background-size:28px 28px;pointer-events:none;"></div>
+  <!-- Gradient: very heavy at bottom so name reads clean -->
+  <div style="position:absolute;inset:0;background:linear-gradient(to top, rgba(0,0,0,.97) 0%, rgba(0,0,0,.55) 38%, rgba(0,0,0,.06) 100%);pointer-events:none;"></div>
 
-  <div style="position:relative;z-index:10;width:100%;padding:0 24px 48px;">
-    <div style="max-width:680px;">
+  <!-- Block sits low, nudged slightly left of center -->
+  <div style="position:relative;z-index:10;width:100%;padding:0 20px 72px 18px;">
+    <div style="max-width:760px;">
 
       {% if category %}
-      <div style="display:inline-flex;align-items:center;margin-bottom:14px;padding:4px 13px;border-radius:999px;font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:rgba(255,255,255,.7);border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.1);">
+      <div style="margin-bottom:18px;font-size:9px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:rgba(255,255,255,.32);">
         {{ category }}
       </div>
       {% endif %}
 
-      <h1 style="font-size:clamp(34px,7vw,72px);font-weight:900;color:#fff;line-height:1.0;letter-spacing:-.03em;margin:0 0 16px;">
+      <!-- Name: overwhelming, nearly crops at the bottom edge -->
+      <h1 style="font-size:clamp(52px,10.5vw,108px);font-weight:900;color:#fff;line-height:0.90;letter-spacing:-.04em;margin:0 0 28px;word-break:break-word;">
         {{ name }}
       </h1>
 
-      <!-- Rating — trust anchor, always HIGH when available -->
+      <!-- Rating — present but not competing -->
       {% if rating %}
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px;">
-        <span class="stars" style="font-size:18px;">★★★★★</span>
-        <span style="color:#fff;font-weight:700;font-size:17px;">{{ "%.1f"|format(rating|float) }}</span>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:28px;opacity:0.6;">
+        <span class="stars" style="font-size:13px;">★★★★★</span>
+        <span style="color:#fff;font-weight:500;font-size:14px;">{{ "%.1f"|format(rating|float) }}</span>
         {% if reviews_count %}
-        <span style="color:rgba(255,255,255,.35);font-size:13px;">{{ reviews_count }} Google reviews</span>
+        <span style="color:rgba(255,255,255,.4);font-size:12px;">· {{ reviews_count }} reviews</span>
         {% endif %}
       </div>
       {% endif %}
 
-      <!-- Real review phrase — primary voice on this page -->
+      <!-- Hero line: reduced to a whisper under the name -->
       {% if hero_line %}
-      <p style="font-size:clamp(16px,3vw,22px);color:rgba(255,255,255,.6);font-weight:300;font-style:italic;line-height:1.45;margin:0 0 22px;max-width:520px;">
+      <p style="font-size:clamp(12px,1.8vw,16px);color:rgba(255,255,255,.38);font-weight:300;font-style:italic;line-height:1.5;margin:0 0 28px;max-width:440px;">
         "{{ hero_line }}"
       </p>
       {% endif %}
 
       {% if wa_url %}
       <a href="{{ wa_url }}" target="_blank" rel="noopener"
-         style="display:inline-flex;align-items:center;gap:10px;font-weight:700;font-size:14px;border-radius:999px;padding:15px 30px;color:#fff;text-decoration:none;background:#25D366;box-shadow:0 4px 28px rgba(37,211,102,.5);">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+         style="display:inline-flex;align-items:center;gap:10px;font-weight:700;font-size:13px;border-radius:999px;padding:13px 26px;color:#fff;text-decoration:none;background:#25D366;box-shadow:0 4px 28px rgba(37,211,102,.45);">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
           <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z M12 0C5.373 0 0 5.373 0 12c0 2.107.549 4.09 1.508 5.814L.057 23.998l6.305-1.654A11.945 11.945 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.891 0-3.658-.506-5.186-1.389l-.371-.221-3.844 1.008 1.027-3.748-.242-.387A9.955 9.955 0 012 12c0-5.514 4.486-10 10-10s10 4.486 10 10-4.486 10-10 10z"/>
         </svg>
         Chat on WhatsApp
@@ -175,80 +174,115 @@
 
 
 <!-- ════════════════════════════════════════════
-     2 · IMAGE STRIP — horizontal scroll
-     Airbnb-style. No grid. No borders. Real photos only.
+     2 · IMAGE STRIP — asymmetric, one dominant
+     No borders. No radius. One bleeds off-screen.
 ════════════════════════════════════════════ -->
 {% if gallery_images and gallery_images|length >= 1 %}
-<div class="reveal" style="padding: 40px 0 0;">
+<div class="reveal" style="padding: 56px 0 0; overflow: hidden;">
   <div class="img-strip">
-    {% for img in gallery_images[:6] %}
-    <img src="{{ img }}" alt="{{ name }}"
+
+    {% set imgs = gallery_images[:4] %}
+
+    {# Image 1: dominant — tall, wide, anchors the set #}
+    {% if imgs|length >= 1 %}
+    <img src="{{ imgs[0] }}" alt="{{ name }}"
          loading="lazy" referrerpolicy="no-referrer"
-         onerror="this.parentElement.style.display='none'"
+         onerror="this.style.opacity='0'"
          class="strip-img"
-         style="width:{% if loop.first %}300px{% else %}220px{% endif %};height:{% if loop.first %}240px{% else %}180px{% endif %};" />
-    {% endfor %}
-    <!-- End spacer so last card isn't cut off on mobile -->
-    <div style="flex-shrink:0;width:8px;"></div>
+         style="width:clamp(300px,48vw,520px);height:clamp(260px,40vw,420px);border-radius:14px 0 0 14px;flex-shrink:0;" />
+    {% endif %}
+
+    {# Image 2: overlaps image 1 by 18px, slightly shorter #}
+    {% if imgs|length >= 2 %}
+    <img src="{{ imgs[1] }}" alt="{{ name }}"
+         loading="lazy" referrerpolicy="no-referrer"
+         onerror="this.style.opacity='0'"
+         class="strip-img"
+         style="width:clamp(160px,24vw,240px);height:clamp(180px,28vw,300px);margin-left:-18px;margin-top:32px;border-radius:10px;position:relative;z-index:2;flex-shrink:0;" />
+    {% endif %}
+
+    {# Image 3: gap, smaller, sets depth #}
+    {% if imgs|length >= 3 %}
+    <img src="{{ imgs[2] }}" alt="{{ name }}"
+         loading="lazy" referrerpolicy="no-referrer"
+         onerror="this.style.opacity='0'"
+         class="strip-img"
+         style="width:clamp(140px,20vw,210px);height:clamp(150px,22vw,240px);margin-left:12px;margin-top:64px;border-radius:10px;flex-shrink:0;" />
+    {% endif %}
+
+    {# Image 4: deliberately overflows — pushes partially off-screen #}
+    {% if imgs|length >= 4 %}
+    <img src="{{ imgs[3] }}" alt="{{ name }}"
+         loading="lazy" referrerpolicy="no-referrer"
+         onerror="this.style.opacity='0'"
+         class="strip-img"
+         style="width:clamp(200px,30vw,300px);height:clamp(200px,30vw,320px);margin-left:12px;margin-top:16px;border-radius:14px;flex-shrink:0;transform:translateX(40px);" />
+    {% endif %}
+
+    <div style="flex-shrink:0;width:40px;"></div>
   </div>
 </div>
 {% endif %}
 
 
 <!-- ════════════════════════════════════════════
-     3 · REVIEW WALL — raw stacked quotes
-     No cards. No boxes. Just typography.
+     3 · REVIEW WALL — two quotes only
+     First: large and commanding.
+     Second: isolated, indented, smaller. Space between them.
 ════════════════════════════════════════════ -->
 {% if review_phrases %}
-<div class="reveal" style="padding: 72px 24px 0; max-width: 720px;">
-  <p style="font-size:10px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--accent);margin:0 0 36px;">What guests say</p>
-  <div>
-    {% for phrase in review_phrases %}
-    {% if loop.index % 2 == 1 %}
-    <p class="quote-large">"{{ phrase }}"</p>
-    {% else %}
-    <p class="quote-small">"{{ phrase }}"</p>
-    {% endif %}
-    {% endfor %}
-  </div>
-</div>
-{% endif %}
+<div class="reveal" style="padding: 108px 24px 0; max-width: 680px;">
+  {# Only two phrases — one removed intentionally #}
+  {% set phrases = review_phrases[:2] %}
 
-
-<!-- ════════════════════════════════════════════
-     3b · WHAT THEY OFFER — services list
-     Eyebrow label + inline dot list
-════════════════════════════════════════════ -->
-{% if services %}
-<div class="reveal" style="padding: 48px 24px 0; max-width: 720px;">
-  <p style="font-size:small;font-weight:700;letter-spacing:2px;text-transform:uppercase;opacity:0.6;margin-bottom:10px;color:var(--primary);">What they offer</p>
-  <p style="font-size:clamp(15px,2.4vw,19px);font-weight:600;color:var(--primary);line-height:1.7;margin:0;">
-    {% for item in services %}{{ item }}{% if not loop.last %}<span style="color:var(--accent);margin:0 10px;">•</span>{% endif %}{% endfor %}
-  </p>
-</div>
-{% endif %}
-
-
-<!-- ════════════════════════════════════════════
-     4 · WHAT PEOPLE LOVE — inline, no boxes
-     + attribution reviews as clean blockquotes
-════════════════════════════════════════════ -->
-{% if what_people_love or reviews %}
-<div class="reveal" style="padding: 48px 24px 0; max-width: 720px;">
-
-  <!-- Inline dot list — no pills, no boxes -->
-  {% if what_people_love %}
-  <p style="font-size:15px;font-weight:600;color:var(--primary);line-height:1.7;margin:0 0 48px;">
-    {% for item in what_people_love %}{{ item }}{% if not loop.last %}<span style="color:var(--accent);margin:0 12px;">•</span>{% endif %}{% endfor %}
-  </p>
+  {% if phrases|length >= 1 %}
+  <p class="quote-large">"{{ phrases[0] }}"</p>
   {% endif %}
 
-  <!-- Attribution reviews — clean blockquotes, no card frames -->
+  {% if phrases|length >= 2 %}
+  <!-- Second phrase isolated — feels alone, intentional -->
+  <p class="quote-isolated">"{{ phrases[1] }}"</p>
+  {% endif %}
+</div>
+{% endif %}
+
+
+<!-- ════════════════════════════════════════════
+     3b · WHAT THEY OFFER — no label, inline dot list
+     Offset left slightly for broken alignment feel
+════════════════════════════════════════════ -->
+{% if services %}
+<div class="reveal" style="padding: 96px 24px 0 40px; max-width: 700px;">
+  <p style="font-size:clamp(15px,2.4vw,19px);font-weight:600;color:var(--primary);line-height:1.9;margin:0;">
+    {% for item in services %}{{ item }}{% if not loop.last %}<span style="color:var(--accent);margin:0 12px;">·</span>{% endif %}{% endfor %}
+  </p>
+</div>
+{% endif %}
+
+
+<!-- ════════════════════════════════════════════
+     4 · WHAT PEOPLE LOVE + attribution reviews
+     No labels. No boxes. More vertical air.
+     Alignment breaks: reviews indent further right.
+════════════════════════════════════════════ -->
+{% if what_people_love or reviews %}
+<div style="padding: 96px 0 0;">
+
+  <!-- What people love: no label, just the dots at a different indent -->
+  {% if what_people_love %}
+  <div class="reveal" style="padding: 0 24px 0 24px; max-width: 680px;">
+    <p style="font-size:14px;font-weight:600;color:rgba(0,0,0,0.5);line-height:2.0;margin:0 0 80px;letter-spacing:.01em;">
+      {% for item in what_people_love %}{{ item }}{% if not loop.last %}<span style="color:var(--accent);margin:0 14px;">·</span>{% endif %}{% endfor %}
+    </p>
+  </div>
+  {% endif %}
+
+  <!-- Attribution reviews — indented further, more space between -->
   {% if reviews %}
-  <div style="display:flex;flex-direction:column;gap:36px;">
+  <div class="reveal" style="padding: 0 24px 0 48px; max-width: 640px; display:flex; flex-direction:column; gap:56px;">
     {% for r in reviews %}
     <div>
-      <div class="stars" style="font-size:13px;letter-spacing:.08em;margin-bottom:10px;">★★★★★</div>
+      <div class="stars" style="font-size:11px;letter-spacing:.1em;margin-bottom:14px;opacity:0.7;">★★★★★</div>
       <p class="review-quote">"{{ r.text[:240] }}{% if r.text|length > 240 %}…{% endif %}"</p>
       <p class="review-author">— {{ r.author }}</p>
     </div>
@@ -256,10 +290,12 @@
   </div>
 
   {% if google_maps_url and reviews_count and reviews_count|int > 3 %}
-  <a href="{{ google_maps_url }}" target="_blank" rel="noopener"
-     style="display:inline-block;margin-top:28px;font-size:13px;font-weight:700;color:var(--accent);text-decoration:none;">
-    All {{ reviews_count }} reviews on Google ↗
-  </a>
+  <div class="reveal" style="padding: 40px 24px 0 48px;">
+    <a href="{{ google_maps_url }}" target="_blank" rel="noopener"
+       style="display:inline-block;font-size:12px;font-weight:700;color:var(--accent);text-decoration:none;letter-spacing:.04em;">
+      All {{ reviews_count }} reviews on Google ↗
+    </a>
+  </div>
   {% endif %}
   {% endif %}
 
@@ -271,7 +307,7 @@
      5 · LOCATION — edge-to-edge map, minimal text
 ════════════════════════════════════════════ -->
 {% if address or map_embed %}
-<div class="reveal" style="padding: 72px 24px 0;" id="location">
+<div class="reveal" style="padding: 112px 24px 0;" id="location">
 
   {% if map_embed %}
   <!-- Map nearly edge-to-edge, just a touch of radius -->
@@ -301,8 +337,8 @@
 {% endif %}
 
 
-<!-- Footer -->
-<footer style="margin-top:72px;padding:24px;text-align:center;font-size:11px;color:rgba(0,0,0,.25);border-top:1px solid rgba(0,0,0,.07);">
+<!-- Footer — flush left, no border, just whitespace -->
+<footer style="margin-top:120px;padding:32px 24px 48px;font-size:11px;color:rgba(0,0,0,.2);letter-spacing:.04em;">
   {{ name }}{% if city %} · {{ city }}{% endif %}
 </footer>
 

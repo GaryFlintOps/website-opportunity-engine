@@ -648,3 +648,158 @@ async def list_routes():
 @app.get("/health")
 async def health():
     return {"status": "ok", "site_url": SITE_URL}
+
+
+# ── Guardrail Debug Dashboard ──────────────────────────────────────────────────
+
+@app.get("/debug/guardrails", response_class=HTMLResponse)
+async def debug_guardrails(request: Request):
+    """
+    Per-business guardrail report.
+
+    Shows for each lead:
+      - images:  total / valid / AI-added
+      - reviews: total / accepted
+      - status:  PASSED / FAILED
+      - reason:  why it failed (if applicable)
+    """
+    from src.guardrails import validate_image, compress_review, validate_business
+    from src.enhancer  import generate_support_images
+
+    leads, industry, location = load_latest_leads()
+    filter_stats = load_latest_filter_stats()
+
+    rows = []
+    for lead in leads:
+        name   = lead.get("name", "<unknown>")
+        photos = lead.get("photos") or []
+        reviews = lead.get("reviews") or []
+
+        # Image counts
+        if photos and isinstance(photos[0], dict):
+            valid_images = sum(1 for img in photos if validate_image(img))
+        else:
+            valid_images = len([p for p in photos if p])
+        total_images = len(photos)
+
+        # AI support images (how many would be added)
+        ai_images = len(generate_support_images(
+            lead.get("category", industry),
+            real_image_count=valid_images,
+        ))
+
+        # Review counts
+        total_reviews = len(reviews)
+        accepted_reviews = sum(
+            1 for r in reviews
+            if compress_review(r.get("text", "") if isinstance(r, dict) else str(r))
+        )
+
+        # Pass/fail
+        passed = validate_business(lead)
+        if passed:
+            status = "PASSED"
+            reason = ""
+        else:
+            status = "FAILED"
+            # Determine primary reason
+            try:
+                rating = float(lead.get("rating") or 0)
+            except (TypeError, ValueError):
+                rating = 0.0
+
+            if not name.strip():
+                reason = "data incomplete — missing name"
+            elif rating < 4.0:
+                reason = f"data incomplete — rating {rating:.1f} < 4.0"
+            elif valid_images < 5:
+                reason = f"not enough valid images ({valid_images}/5)"
+            elif accepted_reviews < 2:
+                reason = f"reviews too weak ({accepted_reviews}/2)"
+            else:
+                reason = "failed validation"
+
+        rows.append({
+            "name":             name,
+            "total_images":     total_images,
+            "valid_images":     valid_images,
+            "ai_images":        ai_images,
+            "total_reviews":    total_reviews,
+            "accepted_reviews": accepted_reviews,
+            "status":           status,
+            "reason":           reason,
+            "rating":           lead.get("rating", "—"),
+        })
+
+    passed_count  = sum(1 for r in rows if r["status"] == "PASSED")
+    failed_count  = sum(1 for r in rows if r["status"] == "FAILED")
+
+    # ── Build simple HTML table ───────────────────────────────────────────
+    def _row_html(r: dict) -> str:
+        colour = "#2a6e3f" if r["status"] == "PASSED" else "#8b1a1a"
+        border = "2px solid #3a9e5f" if r["status"] == "PASSED" else "2px solid #c0392b"
+        reason_cell = f'<span style="color:#c0392b">{r["reason"]}</span>' if r["reason"] else "—"
+        return (
+            f'<tr style="border-left:{border}">'
+            f'<td>{r["name"]}</td>'
+            f'<td>{r["total_images"]} / <strong>{r["valid_images"]}</strong> / +{r["ai_images"]}</td>'
+            f'<td>{r["total_reviews"]} / <strong>{r["accepted_reviews"]}</strong></td>'
+            f'<td>{r["rating"]}</td>'
+            f'<td style="color:{colour};font-weight:bold">{r["status"]}</td>'
+            f'<td>{reason_cell}</td>'
+            f'</tr>'
+        )
+
+    rows_html = "\n".join(_row_html(r) for r in rows)
+    guardrail_passed  = filter_stats.get("guardrail_passed", "—")
+    guardrail_skipped = filter_stats.get("guardrail_skipped", "—")
+
+    html = f"""<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Guardrail Debug — {industry} / {location}</title>
+  <style>
+    body  {{ font-family: Arial, sans-serif; background: #0d0f14; color: #e0e0e0; padding: 24px; }}
+    h1    {{ color: #c9a96e; margin-bottom: 4px; }}
+    p     {{ color: #888; margin: 0 0 16px; }}
+    .summary {{ display: flex; gap: 24px; margin-bottom: 20px; }}
+    .chip {{ padding: 8px 16px; border-radius: 6px; font-weight: bold; font-size: 14px; }}
+    .pass {{ background: #1a3d2b; color: #4caf50; }}
+    .fail {{ background: #3d1a1a; color: #e57373; }}
+    table {{ width: 100%; border-collapse: collapse; font-size: 13px; }}
+    th    {{ background: #1a1d24; color: #c9a96e; text-align: left; padding: 10px 12px; }}
+    td    {{ padding: 9px 12px; border-bottom: 1px solid #222; }}
+    tr:hover td {{ background: #151820; }}
+    a     {{ color: #c9a96e; }}
+  </style>
+</head>
+<body>
+  <h1>🛡 Guardrail Debug</h1>
+  <p>{industry} · {location} · {len(rows)} businesses evaluated</p>
+  <div class="summary">
+    <div class="chip pass">✅ Passed: {passed_count}</div>
+    <div class="chip fail">❌ Failed: {failed_count}</div>
+    <div class="chip" style="background:#1a1d24;color:#888">
+      Pipeline guardrail — passed: {guardrail_passed} / skipped: {guardrail_skipped}
+    </div>
+  </div>
+  <table>
+    <thead>
+      <tr>
+        <th>Business</th>
+        <th>Images (total / valid / AI-added)</th>
+        <th>Reviews (total / accepted)</th>
+        <th>Rating</th>
+        <th>Status</th>
+        <th>Reason for failure</th>
+      </tr>
+    </thead>
+    <tbody>
+      {rows_html}
+    </tbody>
+  </table>
+  <p style="margin-top:24px"><a href="/">← Back to dashboard</a></p>
+</body>
+</html>"""
+    return HTMLResponse(html)

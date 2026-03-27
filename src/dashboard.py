@@ -198,6 +198,15 @@ async def index(
 
 # ── Search ────────────────────────────────────────────────────────────────────
 
+@app.get("/search")
+async def search_page(request: Request):
+    """
+    GET /search — browser-safe redirect back to the dashboard home.
+    Prevents a 405 when someone navigates directly to /search in the address bar.
+    """
+    return RedirectResponse(url="/", status_code=302)
+
+
 @app.post("/search")
 async def search(
     background_tasks: BackgroundTasks,

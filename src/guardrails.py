@@ -148,8 +148,8 @@ def compress_review(text: str) -> str | None:
 # ── BUSINESS VALIDATION ───────────────────────────────────────────────────────
 
 _MIN_RATING            = 3.8   # widened slightly — 4.0 was cutting too many legitimate shops
-_MIN_VALID_IMAGES      = 2    # lowered from 5 — many legitimate SMBs have only 2–3 Google photos
-_MIN_COMPRESSED_REVIEWS = 1   # lowered from 2 — one strong signal is enough to confirm authenticity
+_MIN_VALID_IMAGES      = 1    # Outscraper maps/search-v3 returns only 1 photo per result
+_MIN_COMPRESSED_REVIEWS = 0   # Outscraper maps/search-v3 returns review COUNT only, no review text
 
 
 def validate_business(business: dict) -> bool:

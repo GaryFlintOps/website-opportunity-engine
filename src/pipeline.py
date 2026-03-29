@@ -56,7 +56,7 @@ def _guardrail_filter(leads: list[dict]) -> tuple[list[dict], dict]:
       1. Run validate_business() — skip if it fails (name / rating / image / review minimums)
       2. Filter images:     keep only valid image dicts (or all URL strings)
       3. Compress reviews:  keep only reviews that yield a phrase
-      4. Enforce minimums:  skip if < 3 valid images or < 2 compressed reviews
+      4. Enforce minimums:  skip if < 1 valid image (review check disabled — Outscraper returns no review text)
 
     Returns (passing_leads, stats_dict).
     """
@@ -99,17 +99,18 @@ def _guardrail_filter(leads: list[dict]) -> tuple[list[dict], dict]:
         )
 
         # ── Step 4: Minimum enforcement ───────────────────────────────────
-        if len(valid_images) < 3:
-            reason = f"not enough valid images ({len(valid_images)} < 3)"
+        # Thresholds match guardrails.py:
+        #   images:  ≥ 1  — Outscraper maps/search-v3 returns only 1 photo per result
+        #   reviews: ≥ 0  — endpoint returns review COUNT only; no review text to compress
+        if len(valid_images) < 1:
+            reason = f"not enough valid images ({len(valid_images)} < 1)"
             print(f"[Guardrail] SKIP '{name}': {reason}")
             skipped.append({"name": name, "reason": reason})
             continue
 
-        if len(compressed_reviews) < 2:
-            reason = f"reviews too weak ({len(compressed_reviews)} < 2)"
-            print(f"[Guardrail] SKIP '{name}': {reason}")
-            skipped.append({"name": name, "reason": reason})
-            continue
+        # Review compression check intentionally omitted for Outscraper —
+        # maps/search-v3 never returns review text, so compressed_reviews is
+        # always empty and checking it would reject every business.
 
         # ── Step 5: Attach filtered data back onto lead ───────────────────
         lead = dict(lead)   # shallow copy — don't mutate original

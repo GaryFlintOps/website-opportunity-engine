@@ -584,9 +584,11 @@ def _normalize_outscraper(item: dict) -> dict:
     format produced by _normalize() for Apify.  All downstream pipeline code
     (dedup, is_relevant, scoring, transformer, dashboard) stays untouched.
     """
-    # Photos — Outscraper nests them under photos_data or as a flat list
+    # Photos — maps/search-v3 returns a single URL string in "photo".
+    # Richer endpoints return a list in "photos_data" or "photos".
+    # We handle all three cases so the normaliser works regardless of endpoint.
     photos: list[str] = []
-    for key in ("photos_data", "photos", "photo"):
+    for key in ("photos_data", "photos"):
         raw_photos = item.get(key) or []
         if not isinstance(raw_photos, list):
             continue
@@ -604,9 +606,17 @@ def _normalize_outscraper(item: dict) -> dict:
                     photos.append(img_url)
         if photos:
             break
+
+    # Fallback: single "photo" string (what maps/search-v3 always returns)
+    if not photos:
+        single = (item.get("photo") or item.get("street_view") or "").strip()
+        if single.startswith("http"):
+            photos.append(single)
+
     photos = photos[:MAX_IMAGES]
 
-    # Reviews — Outscraper puts full review objects in reviews_data
+    # Reviews — maps/search-v3 only returns a count; full text comes from
+    # reviews_data when using the reviews enrichment endpoint.
     reviews: list[dict] = []
     for r in (item.get("reviews_data") or [])[:MAX_REVIEWS]:
         text = (r.get("review_text") or r.get("text") or "").strip()
@@ -637,7 +647,13 @@ def _normalize_outscraper(item: dict) -> dict:
     website  = (item.get("site")     or item.get("website") or "").strip()
     rating   = _safe_float(item.get("rating") or item.get("stars"))
     rev_cnt  = _safe_int(item.get("reviews") or item.get("reviews_count"))
-    maps_url = (item.get("url")      or item.get("google_maps_url") or "").strip()
+    # maps_url: prefer explicit url/google_maps_url, fall back to location_link
+    maps_url = (
+        item.get("url")
+        or item.get("google_maps_url")
+        or item.get("location_link")
+        or ""
+    ).strip()
     place_id = (item.get("place_id") or "").strip()
     lat      = str(item.get("latitude")  or item.get("lat") or "")
     lng      = str(item.get("longitude") or item.get("lng") or "")

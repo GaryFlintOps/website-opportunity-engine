@@ -17,7 +17,7 @@ from src.storage import (
 from src.transformer import build_business_data
 from src.cards import prepare_leads_for_display, filter_leads
 from src.config import SITE_URL, DEMOS_DIR, OUTPUT_DIR, CACHE_DIR, HERO_IMAGES_DIR
-from src.imagegen import generate_hero_image
+from src.imagegen import generate_hero_image, cache_hero_from_photos
 from src.outreach import generate_message, generate_followup
 from datetime import datetime as _dt
 from src.tracking import (
@@ -549,6 +549,7 @@ async def render_demo(request: Request, slug: str):
         "color_surface":  colors.get("surface", "#EDE8DE"),
         "about_headline": data.get("about_headline", ""),
         "about_text":     data.get("about_text", ""),
+        "opening_hours":  data.get("opening_hours", []),
         "feature_stat":   data.get("feature_stat", "Locally Loved"),
         "feature_pills":  data.get("feature_pills", []),
         "cta_label":      data.get("cta_label", "Get in Touch"),
@@ -621,11 +622,14 @@ async def generate_demo(slug: str, force: bool = False):
     try:
         bd = build_business_data(lead, industry)
 
-        # Generate a permanent AI hero image (replaces expiring Google photo URL)
-        # Runs synchronously here; image is saved to disk for future requests.
-        ai_img = generate_hero_image(slug, bd)
-        if ai_img:
-            bd["hero_image"] = ai_img
+        # Hero image: try real photo first (downloads + caches to avoid URL expiry),
+        # then fall back to DALL-E 3 if no real photo is available.
+        hero_img = (
+            cache_hero_from_photos(slug, lead.get("photos") or [])
+            or generate_hero_image(slug, bd)
+        )
+        if hero_img:
+            bd["hero_image"] = hero_img
 
         save_demo(slug, bd)
         return JSONResponse({
@@ -664,9 +668,13 @@ async def bulk_generate(request: Request, background_tasks: BackgroundTasks):
 def _generate_one(slug: str, lead: dict, industry: str):
     try:
         bd = build_business_data(lead, industry)
-        ai_img = generate_hero_image(slug, bd)
-        if ai_img:
-            bd["hero_image"] = ai_img
+        # Hero image: try real photo first, fall back to DALL-E 3
+        hero_img = (
+            cache_hero_from_photos(slug, lead.get("photos") or [])
+            or generate_hero_image(slug, bd)
+        )
+        if hero_img:
+            bd["hero_image"] = hero_img
         save_demo(slug, bd)
         print(f"[BulkGen] ✓ {slug}")
     except Exception as e:
@@ -833,6 +841,7 @@ async def demo_direct(request: Request):
         "color_surface":    colors.get("surface", "#EDE8DE"),
         "about_headline":   data.get("about_headline", ""),
         "about_text":       data.get("about_text", ""),
+        "opening_hours":    data.get("opening_hours", []),
         "feature_stat":     data.get("feature_stat", "Locally Loved"),
         "feature_pills":    data.get("feature_pills", []),
         "cta_label":        data.get("cta_label", "Get in Touch"),

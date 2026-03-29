@@ -658,6 +658,22 @@ def _normalize_outscraper(item: dict) -> dict:
     lat      = str(item.get("latitude")  or item.get("lat") or "")
     lng      = str(item.get("longitude") or item.get("lng") or "")
 
+    # ── About / description — plain text from Google Maps business profile ─────
+    description = (item.get("description") or item.get("about_summary") or "").strip()
+
+    # ── Working hours — Outscraper returns a dict {day: "HH AM–HH PM"} ─────────
+    # Stored raw here; transformer converts to the [{days, hours, closed}] format
+    working_hours_raw = item.get("working_hours") or item.get("opening_hours") or {}
+    if not isinstance(working_hours_raw, dict):
+        working_hours_raw = {}
+
+    # ── About attributes — nested dict of feature flags from Google Maps ────────
+    # e.g. {"Service options": {"Dine-in": true, "Takeaway": true}, ...}
+    # Stored raw; transformer flattens to feature pills
+    about_attrs_raw = item.get("about") or {}
+    if not isinstance(about_attrs_raw, dict):
+        about_attrs_raw = {}
+
     return {
         "name":               name,
         "city":               city,
@@ -677,6 +693,10 @@ def _normalize_outscraper(item: dict) -> dict:
         "reviews_text":       [r["text"] for r in reviews],
         "has_whatsapp":       False,
         "whatsapp_confidence": 0,
+        # Real About data from Google Maps
+        "description":        description,
+        "working_hours_raw":  working_hours_raw,
+        "about_attrs_raw":    about_attrs_raw,
     }
 
 

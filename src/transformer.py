@@ -254,6 +254,77 @@ def _resolve(lookup_dict: dict, default, category: str, industry: str):
     return result
 
 
+_DAY_ORDER = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+
+
+def _parse_opening_hours(raw: dict) -> list[dict]:
+    """
+    Convert Outscraper's working_hours dict to the [{days, hours, closed}] format
+    the demo template expects.
+
+    Input:  {"Monday": "9 AM–9 PM", "Tuesday": "9 AM–9 PM", "Sunday": "Closed", ...}
+    Output: [{"days": "Monday – Saturday", "hours": "9 AM – 9 PM", "closed": False},
+             {"days": "Sunday", "hours": "", "closed": True}]
+
+    Consecutive days with identical hours are grouped into a single row.
+    """
+    if not raw or not isinstance(raw, dict):
+        return []
+
+    # Normalise keys to title-case and build an ordered list
+    ordered: list[tuple[str, str]] = []
+    for day in _DAY_ORDER:
+        # Accept both "Monday" and "monday"
+        val = raw.get(day) or raw.get(day.lower()) or ""
+        ordered.append((day, str(val).strip()))
+
+    # Group consecutive days with the same hours value
+    result: list[dict] = []
+    i = 0
+    while i < len(ordered):
+        day, hours = ordered[i]
+        j = i + 1
+        while j < len(ordered) and ordered[j][1] == hours:
+            j += 1
+        # Days i..j-1 all share the same hours
+        if j - i == 1:
+            label = day
+        else:
+            label = f"{ordered[i][0]} – {ordered[j-1][0]}"
+        closed = hours.lower() in ("closed", "", "none")
+        result.append({
+            "days":   label,
+            "hours":  "" if closed else hours,
+            "closed": closed,
+        })
+        i = j
+
+    return result
+
+
+def _flatten_about_attrs(raw: dict) -> list[str]:
+    """
+    Flatten Outscraper's nested about attributes dict into a plain list of strings.
+
+    Input:  {"Service options": {"Dine-in": True, "Takeaway": True},
+             "Highlights": {"Good for groups": True}}
+    Output: ["Dine-in", "Takeaway", "Good for groups"]
+
+    Only includes attributes explicitly set to True.  Section headings (keys of
+    the outer dict) are dropped — they're labels, not features.
+    """
+    pills: list[str] = []
+    if not raw or not isinstance(raw, dict):
+        return pills
+    for section_val in raw.values():
+        if not isinstance(section_val, dict):
+            continue
+        for attr, flag in section_val.items():
+            if flag is True:
+                pills.append(str(attr).strip())
+    return pills
+
+
 def _build_about_text(name: str, city: str, category: str, industry: str,
                        rating: float, reviews_count: int) -> str:
     """Generate a 2-sentence about blurb from real business data."""
@@ -733,9 +804,22 @@ def build_business_data(lead: dict, industry: str) -> dict:
     colors         = _resolve(INDUSTRY_COLORS,         DEFAULT_COLORS,         category, industry)
     about_headline = _resolve(INDUSTRY_ABOUT_HEADLINES, DEFAULT_ABOUT_HEADLINE, category, industry)
     feature_stat   = ai_trust or _resolve(INDUSTRY_FEATURE_STAT, DEFAULT_FEATURE_STAT, category, industry)
-    feature_pills  = _resolve(INDUSTRY_FEATURE_PILLS,  DEFAULT_FEATURE_PILLS,  category, industry)
+    industry_pills = _resolve(INDUSTRY_FEATURE_PILLS,  DEFAULT_FEATURE_PILLS,  category, industry)
     cta_label      = _resolve(INDUSTRY_CTA_LABEL,      DEFAULT_CTA_LABEL,      category, industry)
-    about_text     = _build_about_text(name, city, category, industry, rating, reviews_count)
+
+    # Real description from Google Maps profile — prefer over generated text
+    real_description = (lead.get("description") or "").strip()
+    about_text = real_description or _build_about_text(name, city, category, industry, rating, reviews_count)
+
+    # Opening hours — parse raw Outscraper dict into template-ready list
+    opening_hours = _parse_opening_hours(lead.get("working_hours_raw") or {})
+
+    # About attributes from Google Maps (e.g. "Dine-in", "Takeaway", "Outdoor seating")
+    about_pills = _flatten_about_attrs(lead.get("about_attrs_raw") or {})
+
+    # Feature pills: use Google Maps About attributes when available (real data);
+    # fall back to industry defaults
+    feature_pills = about_pills[:6] if about_pills else industry_pills
 
     # ── SECTION GUARD ────────────────────────────────────────────────────────
     # REQUIRED sections: always force-fill with fallbacks so page never breaks.
@@ -806,6 +890,7 @@ def build_business_data(lead: dict, industry: str) -> dict:
         "colors":         colors,
         "about_headline": about_headline,
         "about_text":     about_text,
+        "opening_hours":  opening_hours,   # [{days, hours, closed}] from Google Maps
         "feature_stat":   feature_stat,
         "feature_pills":  feature_pills,
         "cta_label":      cta_label,

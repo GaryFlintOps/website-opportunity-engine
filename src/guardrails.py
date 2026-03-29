@@ -75,14 +75,33 @@ def validate_image(image: dict) -> bool:
 
 # ── REVIEW COMPRESSION ───────────────────────────────────────────────────────
 
-# Ordered: first keyword match per review wins
+# Ordered: first keyword match per review wins.
+# Covers real language from bike shops, cafés, salons, restaurants, and
+# general SMBs — not just specialist terminology.
 _COMPRESSION_MAP: list[tuple[list[str], str]] = [
-    (["knowledgeable", "know", "expertise", "expert"],       "Knowledgeable staff"),
-    (["quick", "fast", "turnaround", "prompt", "efficient"], "Quick turnaround"),
+    (["knowledgeable", "know", "expertise", "expert"],          "Knowledgeable staff"),
+    (["quick", "fast", "turnaround", "prompt", "efficient"],    "Quick turnaround"),
     (["friendly", "warm", "welcoming", "great service",
-      "excellent service", "good service"],                  "Friendly service"),
-    (["selection", "range", "variety", "stock", "choice"],   "Great selection"),
-    (["fit", "fitting", "bike fit", "sizing"],               "Excellent bike fit"),
+      "excellent service", "good service", "helpful",
+      "assist", "attentive", "kind"],                           "Friendly service"),
+    (["selection", "range", "variety", "stock", "choice"],      "Great selection"),
+    (["fit", "fitting", "bike fit", "sizing"],                  "Excellent bike fit"),
+    (["recommend", "recommended", "must visit", "must-visit",
+      "go-to", "go to"],                                        "Highly recommended"),
+    (["price", "affordable", "value", "cheap", "reasonable",
+      "good value", "great value", "worth"],                    "Competitive pricing"),
+    (["repair", "repaired", "fixed", "serviced", "service",
+      "maintenance", "tune", "overhaul"],                       "Expert repairs"),
+    (["quality", "high quality", "great quality",
+      "top quality", "premium"],                                "Quality products"),
+    (["clean", "tidy", "neat", "well-kept", "spotless"],        "Clean premises"),
+    (["atmosphere", "vibe", "ambience", "ambiance",
+      "cosy", "cozy", "comfortable", "comfortable"],            "Great atmosphere"),
+    (["coffee", "espresso", "latte", "cappuccino", "brew"],     "Excellent coffee"),
+    (["food", "meal", "breakfast", "lunch", "dinner",
+      "menu", "dish", "delicious", "tasty", "yummy"],           "Great food"),
+    (["fresh", "homemade", "home-made", "baked", "pastry",
+      "croissant"],                                             "Fresh homemade food"),
 ]
 
 _ALLOWED_OUTPUTS = {
@@ -91,6 +110,15 @@ _ALLOWED_OUTPUTS = {
     "Friendly service",
     "Great selection",
     "Excellent bike fit",
+    "Highly recommended",
+    "Competitive pricing",
+    "Expert repairs",
+    "Quality products",
+    "Clean premises",
+    "Great atmosphere",
+    "Excellent coffee",
+    "Great food",
+    "Fresh homemade food",
 }
 
 
@@ -119,9 +147,9 @@ def compress_review(text: str) -> str | None:
 
 # ── BUSINESS VALIDATION ───────────────────────────────────────────────────────
 
-_MIN_RATING            = 4.0
-_MIN_VALID_IMAGES      = 5
-_MIN_COMPRESSED_REVIEWS = 2
+_MIN_RATING            = 3.8   # widened slightly — 4.0 was cutting too many legitimate shops
+_MIN_VALID_IMAGES      = 2    # lowered from 5 — many legitimate SMBs have only 2–3 Google photos
+_MIN_COMPRESSED_REVIEWS = 1   # lowered from 2 — one strong signal is enough to confirm authenticity
 
 
 def validate_business(business: dict) -> bool:

@@ -130,6 +130,10 @@ BAD_KEYWORDS: list[str] = [
 
 # ── Bad business types — reject B2B / non-consumer businesses ─────────────────
 # Wholesalers, distributors etc. are not SMB website prospects.
+# NOTE: "service centre/center" and "repair centre/center" were deliberately
+# removed because they describe legitimate consumer-facing businesses
+# (e.g. "Cycle Service Centre", "Phone Repair Center"). B2B trade businesses
+# are rejected via the wholesale/distributor/supplier terms below.
 BAD_BUSINESS_TYPES: list[str] = [
     "wholesale",
     "wholesaler",
@@ -140,11 +144,6 @@ BAD_BUSINESS_TYPES: list[str] = [
     "manufacturing",
     "importer",
     "exporter",
-    # Industrial / trade — surface in bike, gym, mechanics searches
-    "repair center",
-    "repair centre",
-    "service center",
-    "service centre",
     "parts supplier",
     "parts store",
     "equipment rental",

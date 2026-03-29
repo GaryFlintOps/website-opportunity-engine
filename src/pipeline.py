@@ -11,6 +11,42 @@ from src.scorer import score_leads
 from src.storage import slugify, save_leads, save_leads_json
 from src.guardrails import validate_business, validate_image, compress_review
 
+# ── Debug flag ────────────────────────────────────────────────────────────────
+# When True: bypasses all guardrail rejection and minimum thresholds.
+# Always returns at least 1 lead, injecting a fallback demo object if needed.
+# Flip to False to restore normal guardrail behaviour.
+DEBUG_FORCE_BUILD = False
+
+# Fallback demo object used when DEBUG_FORCE_BUILD is True and no real data exists
+_FALLBACK_LEAD = {
+    "name":          "Demo Bike Shop",
+    "rating":        4.6,
+    "reviews_count": 120,
+    "category":      "Bicycle Shop",
+    "city":          "Durban",
+    "address":       "Durban, South Africa",
+    "phone":         "",
+    "website":       "",
+    "google_maps_url": "",
+    "slug":          "demo-bike-shop",
+    "score":         80,
+    "photos": [
+        "https://images.unsplash.com/photo-1485965120184-e220f721d03e?w=1200&h=800&fit=crop",
+        "https://images.unsplash.com/photo-1576435728678-68d0fbf94e91?w=800&h=600&fit=crop",
+        "https://images.unsplash.com/photo-1571068316344-75bc76f77890?w=800&h=600&fit=crop",
+        "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=800&h=600&fit=crop",
+        "https://images.unsplash.com/photo-1532298229144-0ec0c57515c7?w=800&h=600&fit=crop",
+        "https://images.unsplash.com/photo-1604176354204-9268737828e4?w=800&h=600&fit=crop",
+    ],
+    "reviews": [
+        {"text": "Knowledgeable staff who really understand cycling.",  "author": "James K.",  "rating": 5},
+        {"text": "Quick turnaround on my service, really impressed.",   "author": "Sarah M.",  "rating": 5},
+        {"text": "Friendly service every time — wouldn't go elsewhere.","author": "David T.",  "rating": 5},
+    ],
+    "guardrail_passed": True,
+    "debug_fallback":   True,
+}
+
 
 def _guardrail_filter(leads: list[dict]) -> tuple[list[dict], dict]:
     """
@@ -123,8 +159,12 @@ def run_pipeline(industry: str, location: str) -> list[dict]:
     print(f"[Pipeline] Qualified leads:   {len(leads)}")
 
     if not leads:
-        print("[Pipeline] ✗ Fetcher returned no leads — aborting.")
-        return []
+        if DEBUG_FORCE_BUILD:
+            print("[Pipeline] ⚡ Fetcher returned nothing — injecting fallback demo object")
+            leads = [dict(_FALLBACK_LEAD)]
+        else:
+            print("[Pipeline] ✗ Fetcher returned no leads — aborting.")
+            return []
 
     # ── Stage B: Opportunity score ─────────────────────────────────────────
     leads_before = len(leads)
@@ -132,31 +172,46 @@ def run_pipeline(industry: str, location: str) -> list[dict]:
     print(f"[Pipeline] After opp-score:   {len(leads)}  (in: {leads_before})")
 
     if not leads:
-        print("[Pipeline] ✗ Scorer returned empty list — check scorer.py.")
-        return []
+        if DEBUG_FORCE_BUILD:
+            print("[Pipeline] ⚡ Scorer returned nothing — injecting fallback demo object")
+            leads = [dict(_FALLBACK_LEAD)]
+        else:
+            print("[Pipeline] ✗ Scorer returned empty list — check scorer.py.")
+            return []
 
-    # ── Stage C: Guardrail filtering ───────────────────────────────────────
-    leads_before_guardrail = len(leads)
-    leads, guardrail_stats = _guardrail_filter(leads)
+    # ── Stage C: Guardrail filtering (skipped in DEBUG_FORCE_BUILD mode) ──────
+    if DEBUG_FORCE_BUILD:
+        print("[Pipeline] ⚡ DEBUG_FORCE_BUILD=True — guardrails bypassed, all leads pass")
+        for lead in leads:
+            lead.setdefault("guardrail_passed", True)
+        filter_stats["guardrail_passed"]  = len(leads)
+        filter_stats["guardrail_skipped"] = 0
+        filter_stats["guardrail_reasons"] = []
+    else:
+        leads_before_guardrail = len(leads)
+        leads, guardrail_stats = _guardrail_filter(leads)
 
-    print(
-        f"[Pipeline] Guardrail results: "
-        f"{guardrail_stats['passed']} passed / "
-        f"{guardrail_stats['skipped']} skipped "
-        f"(in: {leads_before_guardrail})"
-    )
-    if guardrail_stats["skip_reasons"]:
-        for entry in guardrail_stats["skip_reasons"]:
-            print(f"[Pipeline]   ✗ '{entry['name']}': {entry['reason']}")
+        print(
+            f"[Pipeline] Guardrail results: "
+            f"{guardrail_stats['passed']} passed / "
+            f"{guardrail_stats['skipped']} skipped "
+            f"(in: {leads_before_guardrail})"
+        )
+        if guardrail_stats["skip_reasons"]:
+            for entry in guardrail_stats["skip_reasons"]:
+                print(f"[Pipeline]   ✗ '{entry['name']}': {entry['reason']}")
 
-    # Merge guardrail stats into filter_stats for dashboard display
-    filter_stats["guardrail_passed"]  = guardrail_stats["passed"]
-    filter_stats["guardrail_skipped"] = guardrail_stats["skipped"]
-    filter_stats["guardrail_reasons"] = guardrail_stats["skip_reasons"]
+        filter_stats["guardrail_passed"]  = guardrail_stats["passed"]
+        filter_stats["guardrail_skipped"] = guardrail_stats["skipped"]
+        filter_stats["guardrail_reasons"] = guardrail_stats["skip_reasons"]
 
-    if not leads:
-        print("[Pipeline] ✗ All leads failed guardrails — aborting.")
-        return []
+        if not leads:
+            if DEBUG_FORCE_BUILD:
+                print("[Pipeline] ⚡ No leads — injecting fallback demo object")
+                leads = [dict(_FALLBACK_LEAD)]
+            else:
+                print("[Pipeline] ✗ All leads failed guardrails — aborting.")
+                return []
 
     # ── Slugify ────────────────────────────────────────────────────────────
     for lead in leads:

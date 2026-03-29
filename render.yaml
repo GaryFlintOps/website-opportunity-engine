@@ -2,7 +2,7 @@ services:
   - type: web
     name: website-opportunity-api
     env: python
-    plan: free
+    plan: starter          # persistent disk requires Starter plan or above
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn src.dashboard:app --host 0.0.0.0 --port 10000
     envVars:
@@ -10,3 +10,9 @@ services:
         sync: false
       - key: SITE_URL
         sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+    disk:
+      name: demo-assets
+      mountPath: /opt/render/project/src/data   # maps to the app's data/ directory
+      sizeGB: 1

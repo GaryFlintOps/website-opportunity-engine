@@ -20,6 +20,7 @@ CARDS_DIR = os.path.join(DATA_DIR, "cards")
 REVIEWS_DIR = os.path.join(DATA_DIR, "reviews")
 DEMOS_DIR = os.path.join(DATA_DIR, "demos")
 CACHE_DIR = os.path.join(DATA_DIR, "cache")
+HERO_IMAGES_DIR = os.path.join(DATA_DIR, "hero-images")
 
 # Public URL where demos are served — Render is the single deployment target
 SITE_URL = os.getenv("SITE_URL", "https://website-opportunity-engine.onrender.com")

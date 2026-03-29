@@ -4,6 +4,7 @@ import requests as _requests
 from fastapi import FastAPI, Request, Form, BackgroundTasks, Response
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
+from fastapi.staticfiles import StaticFiles
 # CORSMiddleware intentionally not imported — all clients are same-origin
 
 from src.pipeline import run_pipeline
@@ -15,7 +16,8 @@ from src.storage import (
 )
 from src.transformer import build_business_data
 from src.cards import prepare_leads_for_display, filter_leads
-from src.config import SITE_URL, DEMOS_DIR, OUTPUT_DIR, CACHE_DIR
+from src.config import SITE_URL, DEMOS_DIR, OUTPUT_DIR, CACHE_DIR, HERO_IMAGES_DIR
+from src.imagegen import generate_hero_image
 from src.outreach import generate_message, generate_followup
 from datetime import datetime as _dt
 from src.tracking import (
@@ -50,6 +52,10 @@ TEMPLATES_DIR = os.path.join(BASE_DIR, "templates")
 
 app       = FastAPI(title="Website Opportunity Engine")
 templates = Jinja2Templates(directory=TEMPLATES_DIR)
+
+# Serve AI-generated hero images from disk as permanent static assets
+os.makedirs(HERO_IMAGES_DIR, exist_ok=True)
+app.mount("/static/hero-images", StaticFiles(directory=HERO_IMAGES_DIR), name="hero-images")
 
 # ── CORS ──────────────────────────────────────────────────────────────────────
 # All browser requests are same-origin (served from this Render instance).
@@ -301,10 +307,41 @@ _IMG_HEADERS = {
 
 
 def _proxy_url(img_url: str) -> str:
-    """Wrap an external image URL with our server-side proxy endpoint."""
+    """Wrap an external image URL with our server-side proxy endpoint.
+    Local/static paths (AI-generated images) are returned as-is — no proxy needed.
+    """
     if not img_url:
         return ""
+    if img_url.startswith("/"):   # already a local static path
+        return img_url
     return f"/img-proxy?url={_url_quote(img_url, safe='')}"
+
+
+# Category-keyed Unsplash hero fallbacks (permanent CDN URLs — never expire)
+_HERO_FALLBACKS: dict[str, str] = {
+    "cafe":       "https://images.unsplash.com/photo-1554118811-1e0d58224f24?w=1920&q=80",
+    "coffee":     "https://images.unsplash.com/photo-1495474472359-35827269479f?w=1920&q=80",
+    "restaurant": "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=1920&q=80",
+    "bike":       "https://images.unsplash.com/photo-1485965120184-e220f721d03e?w=1920&q=80",
+    "cycle":      "https://images.unsplash.com/photo-1485965120184-e220f721d03e?w=1920&q=80",
+    "salon":      "https://images.unsplash.com/photo-1560869713-7d0a29430803?w=1920&q=80",
+    "barber":     "https://images.unsplash.com/photo-1503951914875-452162b0f3f1?w=1920&q=80",
+    "gym":        "https://images.unsplash.com/photo-1534438327167-af6e4e82fc16?w=1920&q=80",
+    "bakery":     "https://images.unsplash.com/photo-1509440159596-0249088772ff?w=1920&q=80",
+    "spa":        "https://images.unsplash.com/photo-1540555700478-4be290d57689?w=1920&q=80",
+    "guesthouse": "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=1920&q=80",
+    "hotel":      "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=1920&q=80",
+}
+_HERO_FALLBACK_DEFAULT = "https://images.unsplash.com/photo-1497366216548-37526070297c?w=1920&q=80"
+
+
+def _hero_fallback_url(category: str, industry: str = "") -> str:
+    """Return a permanent Unsplash hero image URL for a given category/industry."""
+    search = (f"{category} {industry}").lower()
+    for key, url in _HERO_FALLBACKS.items():
+        if key in search:
+            return url
+    return _HERO_FALLBACK_DEFAULT
 
 
 @app.get("/img-proxy")
@@ -530,6 +567,10 @@ async def render_demo(request: Request, slug: str):
         "review_phrases":   data.get("review_phrases", []),
         # Image mode: "real" | "mixed" | "fallback" (template uses to mute fallbacks)
         "image_mode":       data.get("image_mode", "real"),
+        # Permanent Unsplash fallback shown if the proxied hero image fails to load
+        "hero_image_fallback": _hero_fallback_url(
+            data.get("category", ""), data.get("industry", "")
+        ),
         # Menu module
         "menu_enabled":   menu_enabled,
         "menu":           menu_data or {},
@@ -579,6 +620,13 @@ async def generate_demo(slug: str, force: bool = False):
 
     try:
         bd = build_business_data(lead, industry)
+
+        # Generate a permanent AI hero image (replaces expiring Google photo URL)
+        # Runs synchronously here; image is saved to disk for future requests.
+        ai_img = generate_hero_image(slug, bd)
+        if ai_img:
+            bd["hero_image"] = ai_img
+
         save_demo(slug, bd)
         return JSONResponse({
             "ok":       True,
@@ -616,6 +664,9 @@ async def bulk_generate(request: Request, background_tasks: BackgroundTasks):
 def _generate_one(slug: str, lead: dict, industry: str):
     try:
         bd = build_business_data(lead, industry)
+        ai_img = generate_hero_image(slug, bd)
+        if ai_img:
+            bd["hero_image"] = ai_img
         save_demo(slug, bd)
         print(f"[BulkGen] ✓ {slug}")
     except Exception as e:
@@ -642,6 +693,166 @@ async def debug_demos():
         return {"files": sorted(os.listdir(DEMOS_DIR))}
     except Exception as e:
         return {"error": str(e)}
+
+
+@app.get("/demo-direct", response_class=HTMLResponse)
+async def demo_direct(request: Request):
+    """
+    GET /demo-direct
+
+    Bypasses the search → lead → generate flow entirely.
+    Builds and renders ONE demo immediately using:
+      1. The first already-generated demo (if any exist)
+      2. The best scored lead from the latest search (built on the fly)
+      3. The hardcoded fallback demo object (no data needed at all)
+
+    No filtering. No validation. Always produces a visible page.
+    """
+    from src.pipeline import _FALLBACK_LEAD
+    from src.transformer import build_business_data
+    from urllib.parse import quote as _q
+
+    # ── Try existing generated demos first ──────────────────────────────────
+    try:
+        demo_files = [f for f in os.listdir(DEMOS_DIR) if f.endswith(".json")]
+    except Exception:
+        demo_files = []
+
+    data = None
+
+    if demo_files:
+        slug = demo_files[0].replace(".json", "")
+        data = load_demo_data(slug)
+        print(f"[DemoDirect] Using existing demo: {slug}")
+
+    # ── Try building from latest leads ──────────────────────────────────────
+    if data is None:
+        try:
+            leads, industry, _ = load_latest_leads()
+            if leads:
+                lead    = leads[0]
+                data    = build_business_data(lead, industry)
+                print(f"[DemoDirect] Built from lead: {lead.get('name', '?')}")
+        except Exception as e:
+            print(f"[DemoDirect] Could not build from leads: {e}")
+
+    # ── Fall back to hardcoded demo object ───────────────────────────────────
+    if data is None:
+        print("[DemoDirect] Using hardcoded fallback demo object")
+        fb       = dict(_FALLBACK_LEAD)
+        photos   = fb.get("photos", [])
+        reviews  = fb.get("reviews", [])
+        data = {
+            "name":           fb["name"],
+            "city":           fb.get("city", ""),
+            "address":        fb.get("address", ""),
+            "phone":          fb.get("phone", ""),
+            "rating":         fb["rating"],
+            "reviews_count":  fb["reviews_count"],
+            "category":       fb.get("category", ""),
+            "google_maps_url": "",
+            "hero_image":     photos[0] if photos else "",
+            "gallery_images": photos[1:5],
+            "show_gallery":   True,
+            "image_mode":     "real",
+            "reviews":        reviews,
+            "has_real_reviews": True,
+            "map_embed":      "",
+            "tagline":        "Your local bike experts",
+            "services":       ["Bike Sales", "Servicing", "Repairs", "Accessories"],
+            "colors":         {"primary": "#0D1520", "accent": "#C9A96E",
+                               "bg": "#F8F7F4", "surface": "#EDE8DE"},
+            "about_headline": "Trusted by local riders",
+            "about_text":     f"{fb['name']} is a trusted local bike shop in {fb.get('city', 'Durban')}, known for knowledgeable staff and fast turnaround.",
+            "feature_stat":   "Locally Loved",
+            "feature_pills":  [],
+            "cta_label":      "Get in Touch",
+            "promo":          "",
+            "cta_line":       "",
+            "review_intel":   {},
+            "what_people_love": ["Knowledgeable staff", "Quick turnaround",
+                                 "Friendly service", "Great selection"],
+            "industry_pack":  "default",
+            "hero_description": f"Trusted local bike shop in {fb.get('city', 'Durban')}",
+            "hero_line":      f"Trusted local bike shop in {fb.get('city', 'Durban')}",
+            "review_phrases": ["Knowledgeable staff who really understand cycling",
+                               "Quick turnaround on every service"],
+            "has_website":    False,
+            "has_whatsapp":   False,
+            "place_id":       "",
+        }
+
+    # ── Render using the standard demo template ──────────────────────────────
+    phone = data.get("phone", "")
+    name  = data.get("name", "Demo")
+    wa_url = ""
+    if phone:
+        import re as _re
+        digits = _re.sub(r"\D", "", phone)
+        if digits.startswith("0") and len(digits) == 10:
+            digits = "27" + digits[1:]
+        wa_url = f"https://wa.me/{digits}?text={_q(f'Hi {name}, I saw your listing!')}"
+
+    colors          = data.get("colors") or {}
+    raw_gallery     = data.get("gallery_images", [])
+    all_gallery     = [_proxy_url(u) for u in raw_gallery if u]
+    reviews         = data.get("reviews", [])
+
+    _ri         = data.get("review_intel") or {}
+    hero_quote  = _ri.get("top_review_quote", "") or ""
+
+    def _hero_review(revs):
+        pool = [r for r in revs if int(r.get("rating", 0)) >= 5] or revs
+        for r in pool:
+            text = r.get("text", "").strip()
+            if len(text) >= 8:
+                words = text.split(".")[0].split()
+                return " ".join(words[:10]) + ("…" if len(words) > 10 else "")
+        return ""
+
+    return templates.TemplateResponse("demo.html", {
+        "request":          request,
+        "name":             name,
+        "tagline":          data.get("tagline", ""),
+        "category":         data.get("category", ""),
+        "city":             data.get("city", ""),
+        "address":          data.get("address", ""),
+        "phone":            phone,
+        "rating":           data.get("rating", ""),
+        "reviews_count":    data.get("reviews_count", ""),
+        "hero_image":       _proxy_url(data.get("hero_image", "")),
+        "gallery_images":   all_gallery,
+        "services":         data.get("services", []),
+        "reviews":          reviews,
+        "google_maps_url":  data.get("google_maps_url", ""),
+        "map_embed":        data.get("map_embed", ""),
+        "wa_url":           wa_url,
+        "color_primary":    colors.get("primary", "#0D1520"),
+        "color_accent":     colors.get("accent",  "#C9A96E"),
+        "color_bg":         colors.get("bg",      "#F8F7F4"),
+        "color_surface":    colors.get("surface", "#EDE8DE"),
+        "about_headline":   data.get("about_headline", ""),
+        "about_text":       data.get("about_text", ""),
+        "feature_stat":     data.get("feature_stat", "Locally Loved"),
+        "feature_pills":    data.get("feature_pills", []),
+        "cta_label":        data.get("cta_label", "Get in Touch"),
+        "promo":            data.get("promo", ""),
+        "cta_line":         data.get("cta_line", ""),
+        "hero_review":      _hero_review(reviews),
+        "hero_quote":       hero_quote,
+        "what_people_love": data.get("what_people_love", []),
+        "industry_pack":    data.get("industry_pack", "default"),
+        "hero_description": data.get("hero_description", ""),
+        "show_gallery":     data.get("show_gallery", True),
+        "hero_line":        data.get("hero_line") or data.get("hero_description", ""),
+        "review_phrases":   data.get("review_phrases", []),
+        "image_mode":       data.get("image_mode", "real"),
+        "hero_image_fallback": _hero_fallback_url(
+            data.get("category", ""), data.get("industry", "")
+        ),
+        "menu_enabled":     False,
+        "menu":             {},
+    })
 
 
 @app.get("/ping")

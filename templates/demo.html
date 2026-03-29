@@ -5,167 +5,260 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>{{ name }}</title>
   <meta name="referrer" content="no-referrer" />
+  {% if tagline %}<meta name="description" content="{{ tagline }}" />{% elif about_text %}<meta name="description" content="{{ about_text[:160] }}" />{% endif %}
 
-  <script src="https://cdn.tailwindcss.com"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,400&display=swap" rel="stylesheet" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,300;1,400&display=swap" rel="stylesheet" />
 
   <style>
     :root {
-      --accent:  {{ color_accent }};
-      --primary: {{ color_primary }};
-      --bg:      {{ color_bg }};
-      --surface: {{ color_surface }};
+      --accent:   {{ color_accent }};
+      --primary:  {{ color_primary }};
+      --bg:       {{ color_bg }};
+      --surface:  {{ color_surface }};
     }
 
-    *, *::before, *::after { box-sizing: border-box; }
-
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
     body {
-      font-family: Inter, ui-sans-serif, system-ui, sans-serif;
-      background: var(--bg);
-      color: var(--primary);
+      font-family: 'Inter', ui-sans-serif, system-ui, sans-serif;
+      background: var(--bg); color: var(--primary);
       overflow-x: hidden;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
     }
 
-    /* ── Hero ── */
+    /* ─── STICKY NAV ─────────────────────────────── */
+    #nav {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 200;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 13px 28px;
+      background: {{ color_bg }}f2;
+      backdrop-filter: blur(20px) saturate(1.6);
+      -webkit-backdrop-filter: blur(20px) saturate(1.6);
+      border-bottom: 1px solid transparent;
+      transform: translateY(-100%);
+      transition: transform .3s ease, border-color .3s ease;
+    }
+    #nav.show { transform: translateY(0); border-bottom-color: rgba(0,0,0,.08); }
+    #nav-name { font-size: 14px; font-weight: 800; color: var(--primary); }
+
+    /* ─── HERO ───────────────────────────────────── */
     @keyframes hero-zoom {
-      from { transform: scale(1.08); }
+      from { transform: scale(1.06); }
       to   { transform: scale(1.00); }
     }
-    #hero-bg { animation: hero-zoom 14s ease-out forwards; }
+    #hero-img { animation: hero-zoom 18s ease-out forwards; }
 
-    /* ── Image strip ── */
-    .img-strip {
-      display: flex;
-      align-items: flex-start;
-      gap: 0;
-      overflow-x: auto;
-      scrollbar-width: none;
-      -webkit-overflow-scrolling: touch;
-      padding: 0 0 0 24px;
-    }
-    @media (min-width: 768px) { .img-strip { padding: 0 0 0 48px; } }
-    .img-strip::-webkit-scrollbar { display: none; }
-    .strip-img {
-      flex-shrink: 0;
-      object-fit: cover;
-      display: block;
-    }
-
-    /* ── Review wall ── */
-    .quote-large {
-      font-size: clamp(30px, 6vw, 52px);
-      font-weight: 300;
-      font-style: italic;
-      line-height: 1.18;
-      letter-spacing: -.03em;
-      color: var(--primary);
-      margin: 0 0 72px;
-    }
-    /* quote-isolated: a single phrase with a lot of air around it */
-    .quote-isolated {
-      font-size: clamp(18px, 3vw, 28px);
-      font-weight: 300;
-      font-style: italic;
-      line-height: 1.5;
-      color: rgba(0,0,0,0.38);
-      margin: 0;
-      padding-left: 44px;
-    }
-    @media (min-width: 768px) { .quote-isolated { padding-left: 80px; } }
-
-    /* ── Attribution reviews ── */
-    .review-quote {
-      font-size: 15px;
-      font-style: italic;
-      color: rgba(0,0,0,0.6);
-      line-height: 1.65;
-      margin: 0;
-    }
-    .review-author {
-      font-size: 12px;
-      font-weight: 600;
-      color: rgba(0,0,0,0.35);
-      letter-spacing: .04em;
-      text-transform: uppercase;
-      margin-top: 10px;
-    }
-
-    /* ── WA fab ── */
-    @keyframes wa-pulse {
-      0%, 100% { box-shadow: 0 0 0 0 rgba(37,211,102,0.45); }
-      65%       { box-shadow: 0 0 0 14px rgba(37,211,102,0); }
-    }
-    .wa-fab { animation: wa-pulse 2.8s ease-in-out infinite; }
-
-    /* ── Scroll reveal ── */
-    .reveal { opacity: 0; transform: translateY(16px); transition: opacity 0.55s ease, transform 0.55s ease; }
+    /* ─── SCROLL REVEAL ──────────────────────────── */
+    .reveal { opacity: 0; transform: translateY(20px); transition: opacity .7s ease, transform .7s ease; }
     .reveal.on { opacity: 1; transform: none; }
 
-    .stars { color: #F59E0B; }
+    /* ─── LAYOUT ─────────────────────────────────── */
+    .wrap { max-width: 960px; margin: 0 auto; padding: 0 28px; }
+    @media (min-width: 768px) { .wrap { padding: 0 48px; } }
+    .sec    { padding: 88px 0; }
+    .sec-sm { padding: 56px 0; }
+    @media (min-width: 768px) { .sec { padding: 120px 0; } .sec-sm { padding: 72px 0; } }
+    .divider { height: 1px; background: rgba(0,0,0,.07); }
+
+    /* ─── TYPE ───────────────────────────────────── */
+    .eyebrow {
+      display: block; font-size: 10px; font-weight: 700;
+      letter-spacing: .18em; text-transform: uppercase;
+      color: var(--accent); margin-bottom: 14px;
+    }
+    .h-xl { font-size: clamp(28px,4.4vw,48px); font-weight: 800; line-height: 1.12; letter-spacing: -.03em; }
+    .h-lg  { font-size: clamp(22px,3.4vw,36px); font-weight: 800; line-height: 1.15; letter-spacing: -.025em; }
+    .body  { font-size: 16px; line-height: 1.82; color: rgba(13,21,32,.56); }
+    @media (min-width: 768px) { .body { font-size: 17px; } }
+    .stars { color: #F59E0B; letter-spacing: 1.5px; }
+
+    /* ─── BUTTONS ────────────────────────────────── */
+    .btn {
+      display: inline-flex; align-items: center; gap: 9px;
+      font-family: inherit; font-weight: 700; font-size: 14px;
+      border-radius: 999px; padding: 13px 26px; border: none;
+      text-decoration: none; cursor: pointer;
+      transition: opacity .18s, transform .15s;
+    }
+    .btn:hover { opacity: .86; transform: translateY(-1px); }
+    .btn-wa      { background: #25D366; color: #fff; box-shadow: 0 4px 22px rgba(37,211,102,.38); }
+    .btn-outline { background: transparent; color: var(--primary); border: 2px solid rgba(0,0,0,.14); }
+    .btn-outline:hover { background: var(--surface); border-color: rgba(0,0,0,.24); opacity:1; }
+    .btn-sm      { padding: 9px 18px; font-size: 13px; }
+
+    /* ─── TRUST BAR ──────────────────────────────── */
+    .trust-bar { background: var(--surface); border-bottom: 1px solid rgba(0,0,0,.07); overflow-x: auto; scrollbar-width: none; }
+    .trust-bar::-webkit-scrollbar { display: none; }
+    .trust-inner { display: flex; align-items: stretch; min-width: max-content; }
+    .trust-cell {
+      display: flex; align-items: center; gap: 11px;
+      padding: 20px 28px; border-right: 1px solid rgba(0,0,0,.08); flex-shrink: 0;
+    }
+    .trust-cell:last-child { border-right: none; }
+    /* On wider screens: fill full width, cells share space evenly */
+    @media (min-width: 768px) {
+      .trust-inner { min-width: 0; width: 100%; }
+      .trust-cell { flex: 1; flex-shrink: 1; white-space: normal; }
+    }
+
+    /* ─── ABOUT GRID ─────────────────────────────── */
+    .about-grid { display: grid; grid-template-columns: 1fr; gap: 44px; }
+    @media (min-width: 768px) { .about-grid { grid-template-columns: 1.15fr 1fr; gap: 72px; align-items: start; } }
+
+    /* ─── LOVE TAGS ──────────────────────────────── */
+    .love-tags { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; }
+    .love-tag {
+      display: inline-flex; align-items: center; gap: 10px;
+      padding: 12px 22px; border-radius: 999px; font-size: 14px; font-weight: 600;
+      background: var(--bg); color: var(--primary); border: 1.5px solid rgba(0,0,0,.12);
+      letter-spacing: -.01em;
+    }
+    .love-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); flex-shrink: 0; }
+
+    /* ─── SERVICES ───────────────────────────────── */
+    .services-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 12px; margin-top: 28px;
+    }
+    .svc {
+      background: var(--bg); border: 1px solid rgba(0,0,0,.08);
+      border-radius: 16px; overflow: hidden;
+      transition: transform .2s, box-shadow .2s;
+    }
+    .svc:hover { transform: translateY(-3px); box-shadow: 0 12px 32px rgba(0,0,0,.09); }
+    .svc-img { width: 100%; aspect-ratio: 3/2; object-fit: cover; display: block; background: var(--surface); opacity: 0; transition: opacity .35s; }
+    .svc-img.loaded { opacity: 1; }
+    .svc-body { padding: 14px 18px 18px; }
+    .svc-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); margin-bottom: 9px; opacity:.8; }
+    .svc-name { font-size: 14px; font-weight: 700; line-height: 1.4; color: var(--primary); }
+
+    /* ─── PROMO BANNER ───────────────────────────── */
+    .promo-box {
+      background: var(--accent); border-radius: 20px; padding: 30px 32px;
+      display: flex; flex-wrap: wrap; align-items: center;
+      justify-content: space-between; gap: 20px;
+    }
+    .promo-btn {
+      display: inline-flex; align-items: center; gap: 9px;
+      font-family: inherit; font-weight: 700; font-size: 14px;
+      border-radius: 999px; padding: 13px 26px;
+      background: var(--primary); color: #fff;
+      text-decoration: none; white-space: nowrap; flex-shrink: 0;
+      box-shadow: 0 4px 18px rgba(0,0,0,.22);
+      transition: opacity .18s, transform .15s;
+    }
+    .promo-btn:hover { opacity: .88; transform: translateY(-1px); }
+
+    /* ─── REVIEW CARDS ───────────────────────────── */
+    .reviews-grid { display: grid; grid-template-columns: 1fr; gap: 14px; margin-top: 32px; }
+    @media (min-width: 600px) { .reviews-grid { grid-template-columns: repeat(2, 1fr); } }
+    @media (min-width: 900px) { .reviews-grid { grid-template-columns: repeat(3, 1fr); } }
+    .rcard {
+      background: var(--surface); border-radius: 18px; padding: 26px;
+      border: 1px solid rgba(0,0,0,.06); display: flex; flex-direction: column;
+    }
+    .rcard-body { font-size: 14px; font-style: italic; color: rgba(13,21,32,.6); line-height: 1.78; flex: 1; }
+    .rcard-author { font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: rgba(13,21,32,.28); margin-top: 18px; }
+
+    /* ─── PHOTO GRID ─────────────────────────────── */
+    .photo-grid { display: grid; grid-template-columns: repeat(12, 1fr); gap: 8px; margin-top: 18px; }
+    .p-main { grid-column: span 8; aspect-ratio: 4/3; object-fit: cover; border-radius: 14px; width: 100%; display: block; transition: transform .3s; }
+    .p-side { grid-column: span 4; aspect-ratio: 3/4; object-fit: cover; border-radius: 14px; width: 100%; display: block; transition: transform .3s; }
+    .p-sm   { grid-column: span 4; aspect-ratio: 4/3; object-fit: cover; border-radius: 12px; width: 100%; display: block; transition: transform .3s; }
+    .photo-grid img:hover { transform: scale(1.025); }
+    @media (max-width: 640px) {
+      .p-main { grid-column: span 12; }
+      .p-side { grid-column: span 6; aspect-ratio: 4/3; }
+      .p-sm   { grid-column: span 6; }
+    }
+
+    /* ─── LOCATION + HOURS ───────────────────────── */
+    .location-grid { display: grid; grid-template-columns: 1fr; gap: 36px; margin-top: 24px; }
+    @media (min-width: 768px) { .location-grid { grid-template-columns: 1fr 1.6fr; align-items: start; } }
+    .hours-row {
+      display: flex; justify-content: space-between; align-items: baseline;
+      padding: 9px 0; border-bottom: 1px solid rgba(0,0,0,.07); gap: 16px;
+    }
+    .hours-row:last-child { border-bottom: none; }
+    .hours-day  { font-size: 13px; font-weight: 600; color: var(--primary); }
+    .hours-time { font-size: 13px; color: rgba(13,21,32,.5); text-align: right; }
+    .hours-closed { font-size: 13px; color: rgba(13,21,32,.3); font-style: italic; text-align: right; }
+
+    /* ─── FLOATING WA ────────────────────────────── */
+    @keyframes wa-pulse {
+      0%,100% { box-shadow: 0 0 0 0 rgba(37,211,102,.5); }
+      65%      { box-shadow: 0 0 0 16px rgba(37,211,102,0); }
+    }
+    .wa-float {
+      position: fixed; bottom: 24px; right: 24px; z-index: 150;
+      display: flex; align-items: center; gap: 9px;
+      padding: 13px 22px; border-radius: 999px;
+      background: #25D366; color: #fff; text-decoration: none;
+      font-family: inherit; font-weight: 700; font-size: 13px;
+      animation: wa-pulse 2.8s ease-in-out infinite;
+      transition: opacity .18s;
+    }
+    .wa-float:hover { opacity: .88; }
+    .wa-label { display: none; }
+    @media (min-width: 480px) { .wa-label { display: inline; } }
   </style>
 </head>
+<body>
 
-<body class="antialiased">
+
+<!-- ══════════════════════════════════════════
+     STICKY NAV — name only, no repeated CTA
+══════════════════════════════════════════ -->
+<nav id="nav">
+  <span id="nav-name">{{ name }}</span>
+  {% if city %}<span style="font-size:12px;color:rgba(13,21,32,.35);font-weight:500;">{{ city }}</span>{% endif %}
+</nav>
 
 
-<!-- ════════════════════════════════════════════
-     1 · HERO — full bleed, full height
-     Text bottom-left, real photo or brand colour
-════════════════════════════════════════════ -->
-<section class="relative overflow-hidden" style="min-height:100svh; min-height:100vh; display:flex; align-items:flex-end; background:var(--primary);">
+<!-- ══════════════════════════════════════════
+     HERO — photo, name, rating, tagline
+     No buttons here — floating WA handles CTA
+══════════════════════════════════════════ -->
+<section id="hero" style="position:relative;min-height:100svh;min-height:100vh;display:flex;flex-direction:column;justify-content:flex-end;background:var(--primary);overflow:hidden;">
 
-  {% if hero_image %}
-  <img id="hero-bg" src="{{ hero_image }}" alt="{{ name }}"
+  {% if hero_image or hero_image_fallback %}
+  <img id="hero-img" src="{{ hero_image or hero_image_fallback }}" alt="{{ name }}"
        referrerpolicy="no-referrer"
-       onerror="this.style.display='none'"
-       style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center;" />
+       data-fallback="{{ hero_image_fallback }}"
+       onerror="var fb=this.getAttribute('data-fallback');if(fb&&this.src!==fb){this.removeAttribute('onerror');this.src=fb;}else{this.style.display='none';}"
+       style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center;pointer-events:none;" />
   {% endif %}
 
-  <!-- Gradient: very heavy at bottom so name reads clean -->
-  <div style="position:absolute;inset:0;background:linear-gradient(to top, rgba(0,0,0,.97) 0%, rgba(0,0,0,.55) 38%, rgba(0,0,0,.06) 100%);pointer-events:none;"></div>
+  <!-- Editorial gradient: clear at top so photo shows, crushes at bottom for text -->
+  <div style="position:absolute;inset:0;background:linear-gradient(to bottom,rgba(0,0,0,.18) 0%,rgba(0,0,0,.02) 35%,rgba(0,0,0,.72) 68%,rgba(0,0,0,.97) 100%);pointer-events:none;"></div>
 
-  <!-- Block sits low, nudged slightly left of center -->
-  <div style="position:relative;z-index:10;width:100%;padding:0 20px 72px 18px;">
-    <div style="max-width:760px;">
+  <!-- Scroll hint top-right -->
+  <div style="position:absolute;top:28px;right:28px;z-index:10;font-size:10px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:rgba(255,255,255,.4);">Scroll ↓</div>
+
+  <div style="position:relative;z-index:10;padding:0 28px 72px;">
+    <div style="max-width:820px;margin:0 auto;">
 
       {% if category %}
-      <div style="margin-bottom:18px;font-size:9px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:rgba(255,255,255,.32);">
-        {{ category }}
-      </div>
+      <p style="font-size:10px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:var(--accent);margin-bottom:16px;">{{ category }}</p>
       {% endif %}
 
-      <!-- Name: overwhelming, nearly crops at the bottom edge -->
-      <h1 style="font-size:clamp(52px,10.5vw,108px);font-weight:900;color:#fff;line-height:0.90;letter-spacing:-.04em;margin:0 0 28px;word-break:break-word;">
-        {{ name }}
-      </h1>
+      <h1 style="font-size:clamp(48px,10.5vw,108px);font-weight:900;color:#fff;line-height:.88;letter-spacing:-.045em;margin-bottom:22px;word-break:break-word;">{{ name }}</h1>
 
-      <!-- Rating — present but not competing -->
       {% if rating %}
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:28px;opacity:0.6;">
-        <span class="stars" style="font-size:13px;">★★★★★</span>
-        <span style="color:#fff;font-weight:500;font-size:14px;">{{ "%.1f"|format(rating|float) }}</span>
-        {% if reviews_count %}
-        <span style="color:rgba(255,255,255,.4);font-size:12px;">· {{ reviews_count }} reviews</span>
-        {% endif %}
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:24px;">
+        <span class="stars" style="font-size:14px;">★★★★★</span>
+        <span style="color:#fff;font-weight:700;font-size:15px;">{{ "%.1f"|format(rating|float) }}</span>
+        {% if reviews_count %}<span style="color:rgba(255,255,255,.42);font-size:13px;">· {{ reviews_count }} Google reviews</span>{% endif %}
       </div>
       {% endif %}
 
-      <!-- Hero line: reduced to a whisper under the name -->
-      {% if hero_line %}
-      <p style="font-size:clamp(12px,1.8vw,16px);color:rgba(255,255,255,.38);font-weight:300;font-style:italic;line-height:1.5;margin:0 0 28px;max-width:440px;">
-        "{{ hero_line }}"
-      </p>
-      {% endif %}
-
-      {% if wa_url %}
-      <a href="{{ wa_url }}" target="_blank" rel="noopener"
-         style="display:inline-flex;align-items:center;gap:10px;font-weight:700;font-size:13px;border-radius:999px;padding:13px 26px;color:#fff;text-decoration:none;background:#25D366;box-shadow:0 4px 28px rgba(37,211,102,.45);">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-          <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z M12 0C5.373 0 0 5.373 0 12c0 2.107.549 4.09 1.508 5.814L.057 23.998l6.305-1.654A11.945 11.945 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.891 0-3.658-.506-5.186-1.389l-.371-.221-3.844 1.008 1.027-3.748-.242-.387A9.955 9.955 0 012 12c0-5.514 4.486-10 10-10s10 4.486 10 10-4.486 10-10 10z"/>
-        </svg>
-        Chat on WhatsApp
-      </a>
+      {% if tagline %}
+      <p style="font-size:clamp(16px,2.4vw,21px);color:rgba(255,255,255,.75);font-weight:400;line-height:1.55;max-width:500px;">{{ tagline }}</p>
+      {% elif hero_description %}
+      <p style="font-size:clamp(16px,2.4vw,21px);color:rgba(255,255,255,.75);font-weight:400;line-height:1.55;max-width:500px;">{{ hero_description }}</p>
       {% endif %}
 
     </div>
@@ -173,203 +266,366 @@
 </section>
 
 
-<!-- ════════════════════════════════════════════
-     2 · IMAGE STRIP — asymmetric, one dominant
-     No borders. No radius. One bleeds off-screen.
-════════════════════════════════════════════ -->
-{% if gallery_images and gallery_images|length >= 1 %}
-<div class="reveal" style="padding: 56px 0 0; overflow: hidden;">
-  <div class="img-strip">
+<!-- ══════════════════════════════════════════
+     TRUST BAR — rating, trust stat, pills
+══════════════════════════════════════════ -->
+{% if rating or feature_stat or feature_pills %}
+<div class="reveal trust-bar">
+  <div class="trust-inner">
 
-    {% set imgs = gallery_images[:4] %}
-
-    {# Image 1: dominant — tall, wide, anchors the set #}
-    {% if imgs|length >= 1 %}
-    <img src="{{ imgs[0] }}" alt="{{ name }}"
-         loading="lazy" referrerpolicy="no-referrer"
-         onerror="this.style.opacity='0'"
-         class="strip-img"
-         style="width:clamp(300px,48vw,520px);height:clamp(260px,40vw,420px);border-radius:14px 0 0 14px;flex-shrink:0;" />
+    {% if rating %}
+    <div class="trust-cell">
+      <div>
+        <div style="font-size:30px;font-weight:900;color:var(--primary);line-height:1;">{{ "%.1f"|format(rating|float) }}</div>
+        <div class="stars" style="font-size:11px;margin-top:3px;">★★★★★</div>
+      </div>
+      <div style="font-size:12px;color:rgba(13,21,32,.4);line-height:1.5;">
+        on Google{% if reviews_count %}<br/><span style="font-weight:700;color:var(--primary);">{{ reviews_count }}</span> reviews{% endif %}
+      </div>
+    </div>
     {% endif %}
 
-    {# Image 2: overlaps image 1 by 18px, slightly shorter #}
-    {% if imgs|length >= 2 %}
-    <img src="{{ imgs[1] }}" alt="{{ name }}"
-         loading="lazy" referrerpolicy="no-referrer"
-         onerror="this.style.opacity='0'"
-         class="strip-img"
-         style="width:clamp(160px,24vw,240px);height:clamp(180px,28vw,300px);margin-left:-18px;margin-top:32px;border-radius:10px;position:relative;z-index:2;flex-shrink:0;" />
+    {% if feature_stat %}
+    <div class="trust-cell">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+      <span style="font-size:14px;font-weight:600;color:var(--primary);">{{ feature_stat }}</span>
+    </div>
     {% endif %}
 
-    {# Image 3: gap, smaller, sets depth #}
-    {% if imgs|length >= 3 %}
-    <img src="{{ imgs[2] }}" alt="{{ name }}"
-         loading="lazy" referrerpolicy="no-referrer"
-         onerror="this.style.opacity='0'"
-         class="strip-img"
-         style="width:clamp(140px,20vw,210px);height:clamp(150px,22vw,240px);margin-left:12px;margin-top:64px;border-radius:10px;flex-shrink:0;" />
-    {% endif %}
-
-    {# Image 4: deliberately overflows — pushes partially off-screen #}
-    {% if imgs|length >= 4 %}
-    <img src="{{ imgs[3] }}" alt="{{ name }}"
-         loading="lazy" referrerpolicy="no-referrer"
-         onerror="this.style.opacity='0'"
-         class="strip-img"
-         style="width:clamp(200px,30vw,300px);height:clamp(200px,30vw,320px);margin-left:12px;margin-top:16px;border-radius:14px;flex-shrink:0;transform:translateX(40px);" />
-    {% endif %}
-
-    <div style="flex-shrink:0;width:40px;"></div>
-  </div>
-</div>
-{% endif %}
-
-
-<!-- ════════════════════════════════════════════
-     3 · REVIEW WALL — two quotes only
-     First: large and commanding.
-     Second: isolated, indented, smaller. Space between them.
-════════════════════════════════════════════ -->
-{% if review_phrases %}
-<div class="reveal" style="padding: 108px 24px 0; max-width: 680px;">
-  {# Only two phrases — one removed intentionally #}
-  {% set phrases = review_phrases[:2] %}
-
-  {% if phrases|length >= 1 %}
-  <p class="quote-large">"{{ phrases[0] }}"</p>
-  {% endif %}
-
-  {% if phrases|length >= 2 %}
-  <!-- Second phrase isolated — feels alone, intentional -->
-  <p class="quote-isolated">"{{ phrases[1] }}"</p>
-  {% endif %}
-</div>
-{% endif %}
-
-
-<!-- ════════════════════════════════════════════
-     3b · WHAT THEY OFFER — no label, inline dot list
-     Offset left slightly for broken alignment feel
-════════════════════════════════════════════ -->
-{% if services %}
-<div class="reveal" style="padding: 96px 24px 0 40px; max-width: 700px;">
-  <p style="font-size:clamp(15px,2.4vw,19px);font-weight:600;color:var(--primary);line-height:1.9;margin:0;">
-    {% for item in services %}{{ item }}{% if not loop.last %}<span style="color:var(--accent);margin:0 12px;">·</span>{% endif %}{% endfor %}
-  </p>
-</div>
-{% endif %}
-
-
-<!-- ════════════════════════════════════════════
-     4 · WHAT PEOPLE LOVE + attribution reviews
-     No labels. No boxes. More vertical air.
-     Alignment breaks: reviews indent further right.
-════════════════════════════════════════════ -->
-{% if what_people_love or reviews %}
-<div style="padding: 96px 0 0;">
-
-  <!-- What people love: no label, just the dots at a different indent -->
-  {% if what_people_love %}
-  <div class="reveal" style="padding: 0 24px 0 24px; max-width: 680px;">
-    <p style="font-size:14px;font-weight:600;color:rgba(0,0,0,0.5);line-height:2.0;margin:0 0 80px;letter-spacing:.01em;">
-      {% for item in what_people_love %}{{ item }}{% if not loop.last %}<span style="color:var(--accent);margin:0 14px;">·</span>{% endif %}{% endfor %}
-    </p>
-  </div>
-  {% endif %}
-
-  <!-- Attribution reviews — indented further, more space between -->
-  {% if reviews %}
-  <div class="reveal" style="padding: 0 24px 0 48px; max-width: 640px; display:flex; flex-direction:column; gap:56px;">
-    {% for r in reviews %}
-    <div>
-      <div class="stars" style="font-size:11px;letter-spacing:.1em;margin-bottom:14px;opacity:0.7;">★★★★★</div>
-      <p class="review-quote">"{{ r.text[:240] }}{% if r.text|length > 240 %}…{% endif %}"</p>
-      <p class="review-author">— {{ r.author }}</p>
+    {% for pill in feature_pills %}
+    <div class="trust-cell">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.8"><polyline points="20 6 9 17 4 12"/></svg>
+      <span style="font-size:13px;font-weight:500;color:rgba(13,21,32,.6);">{{ pill }}</span>
     </div>
     {% endfor %}
-  </div>
 
-  {% if google_maps_url and reviews_count and reviews_count|int > 3 %}
-  <div class="reveal" style="padding: 40px 24px 0 48px;">
-    <a href="{{ google_maps_url }}" target="_blank" rel="noopener"
-       style="display:inline-block;font-size:12px;font-weight:700;color:var(--accent);text-decoration:none;letter-spacing:.04em;">
-      All {{ reviews_count }} reviews on Google ↗
-    </a>
   </div>
-  {% endif %}
-  {% endif %}
-
 </div>
 {% endif %}
 
 
-<!-- ════════════════════════════════════════════
-     5 · LOCATION — edge-to-edge map, minimal text
-════════════════════════════════════════════ -->
-{% if address or map_embed %}
-<div class="reveal" style="padding: 112px 24px 0;" id="location">
+<!-- ══════════════════════════════════════════
+     ABOUT — headline, blurb, what people love
+     No contact details here (those live in location section)
+══════════════════════════════════════════ -->
+<section class="sec reveal">
+  <div class="wrap">
+    <div class="about-grid">
 
-  {% if map_embed %}
-  <!-- Map nearly edge-to-edge, just a touch of radius -->
-  <div style="border-radius:18px;overflow:hidden;width:100%;aspect-ratio:16/9;max-height:420px;">
-    <iframe src="{{ map_embed }}" width="100%" height="100%"
-            style="border:0;display:block;" allowfullscreen loading="lazy"
-            referrerpolicy="no-referrer-when-downgrade"></iframe>
+      <div>
+        <span class="eyebrow">About</span>
+        <h2 class="h-xl" style="margin-bottom:20px;color:var(--primary);">{{ about_headline or name }}</h2>
+        {% if about_text %}
+        <p class="body">{{ about_text }}</p>
+        {% endif %}
+      </div>
+
+      {% if what_people_love %}
+      <div>
+        <span class="eyebrow">What customers love</span>
+        <div class="love-tags">
+          {% for item in what_people_love %}
+          <span class="love-tag"><span class="love-dot"></span>{{ item }}</span>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+
+    </div>
   </div>
-  {% endif %}
+</section>
 
-  <div style="margin-top:20px;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;">
-    {% if address %}
-    <p style="font-size:14px;color:rgba(0,0,0,.5);line-height:1.5;margin:0;flex:1;min-width:200px;">{{ address }}</p>
-    {% endif %}
-    {% if google_maps_url %}
-    <a href="{{ google_maps_url }}" target="_blank" rel="noopener"
-       style="display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:600;color:var(--primary);text-decoration:none;padding:10px 18px;border-radius:10px;border:1px solid rgba(0,0,0,.12);white-space:nowrap;flex-shrink:0;">
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-        <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/>
-      </svg>
-      Open in Google Maps
-    </a>
-    {% endif %}
+
+<!-- ══════════════════════════════════════════
+     SERVICES — what we offer
+══════════════════════════════════════════ -->
+{% if services %}
+<div class="divider"></div>
+<section class="sec reveal" style="background:var(--surface);">
+  <div class="wrap">
+    <span class="eyebrow">What we offer</span>
+    <h2 class="h-lg" style="color:var(--primary);">Our services</h2>
+    <div class="services-grid">
+      {% for service in services %}
+      <div class="svc" data-svc="{{ service | lower }}">
+        <img class="svc-img" src="" alt="{{ service }}" loading="lazy" referrerpolicy="no-referrer" />
+        <div class="svc-body">
+          <div class="svc-dot"></div>
+          <p class="svc-name">{{ service }}</p>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
   </div>
+</section>
+{% endif %}
 
+
+<!-- ══════════════════════════════════════════
+     PROMO BANNER — AI-generated offer
+══════════════════════════════════════════ -->
+{% if promo %}
+<div class="sec-sm reveal">
+  <div class="wrap">
+    <div class="promo-box">
+      <div>
+        <p style="font-size:10px;font-weight:700;letter-spacing:.15em;text-transform:uppercase;color:rgba(13,21,32,.5);margin-bottom:8px;">Special offer</p>
+        <p style="font-size:clamp(17px,2.8vw,25px);font-weight:800;color:var(--primary);line-height:1.25;max-width:520px;">{{ promo }}</p>
+      </div>
+      {% if wa_url %}
+      <a href="{{ wa_url }}" target="_blank" rel="noopener" class="promo-btn">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347zM12 0C5.373 0 0 5.373 0 12c0 2.107.549 4.09 1.508 5.814L.057 23.998l6.305-1.654A11.945 11.945 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.891 0-3.658-.506-5.186-1.389l-.371-.221-3.844 1.008 1.027-3.748-.242-.387A9.955 9.955 0 012 12c0-5.514 4.486-10 10-10s10 4.486 10 10-4.486 10-10 10z"/></svg>
+        Claim offer
+      </a>
+      {% endif %}
+    </div>
+  </div>
 </div>
 {% endif %}
 
 
-<!-- Footer — flush left, no border, just whitespace -->
-<footer style="margin-top:120px;padding:32px 24px 48px;font-size:11px;color:rgba(0,0,0,.2);letter-spacing:.04em;">
-  {{ name }}{% if city %} · {{ city }}{% endif %}
+<!-- ══════════════════════════════════════════
+     REVIEWS — real Google reviews, shown once
+══════════════════════════════════════════ -->
+{% if reviews and has_real_reviews %}
+<div class="divider"></div>
+<section class="sec reveal">
+  <div class="wrap">
+    <span class="eyebrow">Customer reviews</span>
+    <h2 class="h-lg" style="color:var(--primary);">What people are saying</h2>
+
+    <div class="reviews-grid">
+      {% for r in reviews %}
+      <div class="rcard">
+        <div>
+          <div class="stars" style="font-size:12px;letter-spacing:2px;margin-bottom:16px;">★★★★★</div>
+          <p class="rcard-body">"{{ r.text[:280] }}{% if r.text|length > 280 %}…{% endif %}"</p>
+        </div>
+        <p class="rcard-author">— {{ r.author }}</p>
+      </div>
+      {% endfor %}
+    </div>
+
+    {% if google_maps_url and reviews_count and reviews_count|int >= 3 %}
+    <div style="margin-top:28px;">
+      <a href="{{ google_maps_url }}" target="_blank" rel="noopener"
+         style="display:inline-flex;align-items:center;gap:7px;font-size:13px;font-weight:700;color:var(--accent);text-decoration:none;">
+        See all {{ reviews_count }} reviews on Google
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+      </a>
+    </div>
+    {% endif %}
+  </div>
+</section>
+{% endif %}
+
+
+<!-- ══════════════════════════════════════════
+     PHOTO GALLERY
+══════════════════════════════════════════ -->
+{% if gallery_images and gallery_images|length >= 1 %}
+<div class="divider"></div>
+<section class="sec-sm reveal">
+  <div class="wrap">
+    <span class="eyebrow">Gallery</span>
+    {% set imgs = gallery_images %}
+    <div class="photo-grid">
+      {% if imgs|length >= 1 %}
+      <img src="{{ imgs[0] }}" alt="{{ name }}" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.opacity='0.08'" class="p-main" />
+      {% endif %}
+      {% if imgs|length >= 2 %}
+      <img src="{{ imgs[1] }}" alt="{{ name }}" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.opacity='0.08'" class="p-side" />
+      {% endif %}
+      {% for img in imgs[2:5] %}
+      <img src="{{ img }}" alt="{{ name }}" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.opacity='0.08'" class="p-sm" />
+      {% endfor %}
+    </div>
+    {% if image_mode == 'fallback' %}
+    <p style="margin-top:12px;font-size:11px;color:rgba(13,21,32,.28);letter-spacing:.02em;">Representative imagery · Real photos updated when available</p>
+    {% endif %}
+  </div>
+</section>
+{% endif %}
+
+
+<!-- ══════════════════════════════════════════
+     LOCATION — map, opening hours, contact
+     All contact info lives here — nowhere else
+══════════════════════════════════════════ -->
+{% if address or map_embed or phone %}
+<div class="divider"></div>
+<section class="sec reveal">
+  <div class="wrap">
+    <span class="eyebrow">Find us</span>
+    <h2 class="h-lg" style="color:var(--primary);margin-bottom:28px;">{{ name }}{% if city %}, {{ city }}{% endif %}</h2>
+
+    <div class="location-grid">
+
+      <!-- Left column: contact + hours -->
+      <div style="display:flex;flex-direction:column;gap:28px;">
+
+        <!-- Phone + address -->
+        <div style="display:flex;flex-direction:column;gap:14px;">
+          {% if phone %}
+          <div>
+            <p style="font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:rgba(13,21,32,.35);margin-bottom:6px;">Phone</p>
+            <a href="tel:{{ phone }}" style="font-size:16px;font-weight:700;color:var(--primary);text-decoration:none;display:inline-flex;align-items:center;gap:8px;">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.5"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.5 10.8a19.79 19.79 0 01-3.07-8.67A2 2 0 012.41 0h3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L6.09 7.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45 12.84 12.84 0 002.81.7A2 2 0 0122 16.92z"/></svg>
+              {{ phone }}
+            </a>
+          </div>
+          {% endif %}
+          {% if address %}
+          <div>
+            <p style="font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:rgba(13,21,32,.35);margin-bottom:6px;">Address</p>
+            <p style="font-size:14px;color:rgba(13,21,32,.6);line-height:1.6;">{{ address }}</p>
+          </div>
+          {% endif %}
+        </div>
+
+        <!-- Opening hours -->
+        {% if opening_hours %}
+        <div>
+          <p style="font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:rgba(13,21,32,.35);margin-bottom:10px;">Opening hours</p>
+          <div>
+            {% for entry in opening_hours %}
+            <div class="hours-row">
+              <span class="hours-day">{{ entry.days }}</span>
+              {% if entry.closed %}
+              <span class="hours-closed">Closed</span>
+              {% else %}
+              <span class="hours-time">{{ entry.hours }}</span>
+              {% endif %}
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+        {% endif %}
+
+        {% if google_maps_url %}
+        <a href="{{ google_maps_url }}" target="_blank" rel="noopener" class="btn btn-outline" style="align-self:flex-start;font-size:13px;padding:10px 20px;">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
+          Open in Google Maps
+        </a>
+        {% endif %}
+
+      </div>
+
+      <!-- Right column: map -->
+      {% if map_embed %}
+      <div style="border-radius:18px;overflow:hidden;height:380px;">
+        <iframe src="{{ map_embed }}" width="100%" height="100%"
+                style="border:0;display:block;" allowfullscreen loading="lazy"
+                referrerpolicy="no-referrer-when-downgrade" title="{{ name }} location"></iframe>
+      </div>
+      {% endif %}
+
+    </div>
+  </div>
+</section>
+{% endif %}
+
+
+<!-- ══════════════════════════════════════════
+     FOOTER — minimal
+══════════════════════════════════════════ -->
+<footer style="padding:24px 28px 44px;border-top:1px solid rgba(0,0,0,.07);">
+  <div class="wrap" style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+    <p style="font-size:12px;font-weight:700;color:var(--primary);">{{ name }}{% if city %} · {{ city }}{% endif %}</p>
+    <p style="font-size:11px;color:rgba(13,21,32,.22);">© {{ name }}</p>
+  </div>
 </footer>
 
 
-<!-- ════════════════════════════════════════════
-     FLOATING WHATSAPP
-════════════════════════════════════════════ -->
+<!-- ══════════════════════════════════════════
+     FLOATING WHATSAPP — only CTA on the page
+══════════════════════════════════════════ -->
 {% if wa_url %}
-<a href="{{ wa_url }}" target="_blank" rel="noopener"
-   class="wa-fab"
-   style="position:fixed;bottom:22px;right:22px;z-index:50;display:flex;align-items:center;gap:8px;font-weight:700;font-size:13px;color:#fff;border-radius:999px;padding:13px 20px;background:#25D366;text-decoration:none;box-shadow:0 8px 32px rgba(37,211,102,.45);">
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-    <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z M12 0C5.373 0 0 5.373 0 12c0 2.107.549 4.09 1.508 5.814L.057 23.998l6.305-1.654A11.945 11.945 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.891 0-3.658-.506-5.186-1.389l-.371-.221-3.844 1.008 1.027-3.748-.242-.387A9.955 9.955 0 012 12c0-5.514 4.486-10 10-10s10 4.486 10 10-4.486 10-10 10z"/>
+<a href="{{ wa_url }}" target="_blank" rel="noopener" class="wa-float" aria-label="Chat on WhatsApp">
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+    <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347zM12 0C5.373 0 0 5.373 0 12c0 2.107.549 4.09 1.508 5.814L.057 23.998l6.305-1.654A11.945 11.945 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.891 0-3.658-.506-5.186-1.389l-.371-.221-3.844 1.008 1.027-3.748-.242-.387A9.955 9.955 0 012 12c0-5.514 4.486-10 10-10s10 4.486 10 10-4.486 10-10 10z"/>
   </svg>
-  <span class="hidden sm:inline">Chat with us</span>
+  <span class="wa-label">Chat with us</span>
 </a>
 {% endif %}
 
 
 <script>
+  // Sticky nav — appears after hero
+  const nav    = document.getElementById('nav');
+  const heroEl = document.getElementById('hero');
+  function checkNav() {
+    nav.classList.toggle('show', window.scrollY > (heroEl?.offsetHeight ?? 400) * 0.55);
+  }
+  window.addEventListener('scroll', checkNav, { passive: true });
+  checkNav();
+
   // Scroll reveal
   if ('IntersectionObserver' in window) {
     const io = new IntersectionObserver(entries => {
-      entries.forEach(e => {
-        if (e.isIntersecting) { e.target.classList.add('on'); io.unobserve(e.target); }
-      });
-    }, { threshold: 0.04, rootMargin: '0px 0px -20px 0px' });
+      entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('on'); io.unobserve(e.target); } });
+    }, { threshold: 0.06, rootMargin: '0px 0px -28px 0px' });
     document.querySelectorAll('.reveal').forEach(el => io.observe(el));
   } else {
     document.querySelectorAll('.reveal').forEach(el => el.classList.add('on'));
   }
+</script>
+
+<script>
+  /* ── Service card auto-images ─────────────────────────────────────────
+     Maps common service keywords → Unsplash photo IDs.
+     Cards with no match remain text-only (image hidden). */
+  const SVC_IMGS = {
+    'espresso':    'photo-1497515114629-f71d768fd07c',
+    'filter':      'photo-1495474472359-35827269479f',
+    'coffee':      'photo-1509042239860-f550ce710b93',
+    'cold brew':   'photo-1461023058943-07fcbe16d735',
+    'latte':       'photo-1561882468-9110e03e0f78',
+    'cappuccino':  'photo-1517701604599-bb29b565090c',
+    'tea':         'photo-1576092768241-dec231879fc3',
+    'pastry':      'photo-1555507036-ab1f4038808a',
+    'croissant':   'photo-1555507036-ab1f4038808a',
+    'cake':        'photo-1578985545062-69928b1d9587',
+    'baked':       'photo-1509440159596-0249088772ff',
+    'breakfast':   'photo-1533089860892-a7c6f0a88666',
+    'brunch':      'photo-1608039858788-d9e0e5cd3e28',
+    'lunch':       'photo-1546069901-ba9599a7e63c',
+    'meal':        'photo-1546069901-ba9599a7e63c',
+    'light meal':  'photo-1512621776951-a57141f2eefd',
+    'salad':       'photo-1512621776951-a57141f2eefd',
+    'sandwich':    'photo-1481070414801-51fd732d7184',
+    'pizza':       'photo-1513104890138-7c749659a591',
+    'burger':      'photo-1568901346375-23c9450c58cd',
+    'takeaway':    'photo-1542314831-068cd1dbfeeb',
+    'delivery':    'photo-1526367790999-0150786686a2',
+    'catering':    'photo-1555244162-803834f70033',
+    'wine':        'photo-1510812431401-41d2bd2722f3',
+    'beer':        'photo-1535958636474-b021ee887b13',
+    'cocktail':    'photo-1514362545857-3bc16c4c7d1b',
+    'cycling':     'photo-1558618666-fcd25c85cd64',
+    'bike':        'photo-1558618666-fcd25c85cd64',
+    'repair':      'photo-1553836996-7ef6c8af2be3',
+    'fitness':     'photo-1571019614242-c5c5dee9f50b',
+    'yoga':        'photo-1575052814086-f385e2e2ad1b',
+    'hair':        'photo-1521590832167-7bcbfaa6381f',
+    'beauty':      'photo-1487412947147-5cebf100ffc2',
+    'massage':     'photo-1544161515-4ab6ce6db874',
+    'spa':         'photo-1540555700478-4be289fbecef',
+  };
+
+  document.querySelectorAll('.svc[data-svc]').forEach(card => {
+    const name = card.dataset.svc;
+    let photoId = null;
+    for (const [key, id] of Object.entries(SVC_IMGS)) {
+      if (name.includes(key)) { photoId = id; break; }
+    }
+    const img = card.querySelector('.svc-img');
+    if (!img) return;
+    if (!photoId) { img.style.display = 'none'; return; }
+    img.src = `https://images.unsplash.com/${photoId}?ixlib=rb-4.0.3&w=400&h=267&fit=crop&q=72&auto=format`;
+    img.onload  = () => img.classList.add('loaded');
+    img.onerror = () => { img.style.display = 'none'; };
+  });
 </script>
 
 </body>

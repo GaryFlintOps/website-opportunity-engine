@@ -10,6 +10,7 @@ from src.fetcher import fetch_leads
 from src.scorer import score_leads
 from src.storage import slugify, save_leads, save_leads_json
 from src.guardrails import validate_business, validate_image, compress_review
+from src.utils.whatsapp import extract_whatsapp_data, fetch_website_html
 
 # ── Debug flag ────────────────────────────────────────────────────────────────
 # When True: bypasses all guardrail rejection and minimum thresholds.
@@ -166,6 +167,27 @@ def run_pipeline(industry: str, location: str) -> list[dict]:
         else:
             print("[Pipeline] ✗ Fetcher returned no leads — aborting.")
             return []
+
+    # ── Stage A.5: WhatsApp detection ─────────────────────────────────────────
+    # Run before scoring so the scorer sees accurate has_whatsapp + whatsapp_source.
+    # For each lead: try to fetch the website (4s timeout, silently skipped on error),
+    # then classify into link / inferred / maps / none using extract_whatsapp_data().
+    print(f"[Pipeline] WhatsApp detection: {len(leads)} leads …")
+    _wa_counts = {"link": 0, "inferred": 0, "maps": 0, "none": 0}
+    for lead in leads:
+        website = lead.get("website", "")
+        html    = fetch_website_html(website) if website else ""
+        wa_data = extract_whatsapp_data(html=html, maps_phone=lead.get("phone"))
+        lead.update(wa_data)
+        # Maintain backward-compat whatsapp_confidence field (0=none,1=maps/inferred,2=link)
+        src = wa_data.get("whatsapp_source")
+        lead["whatsapp_confidence"] = 2 if src == "link" else (1 if src else 0)
+        _wa_counts[src or "none"] += 1
+    print(
+        f"[Pipeline] WA detection done — "
+        f"link:{_wa_counts['link']} | inferred:{_wa_counts['inferred']} | "
+        f"maps:{_wa_counts['maps']} | none:{_wa_counts['none']}"
+    )
 
     # ── Stage B: Opportunity score ─────────────────────────────────────────
     leads_before = len(leads)

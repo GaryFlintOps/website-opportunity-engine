@@ -2,8 +2,9 @@ import os
 import csv
 import json
 import re
+import secrets
 import unicodedata
-from datetime import datetime
+from datetime import datetime, timedelta
 from src.config import OUTPUT_DIR, DEMOS_DIR
 
 DEMO_STATES = ("not_generated", "generated", "approved", "sent")
@@ -141,11 +142,14 @@ def save_demo(slug: str, business_data: dict) -> str:
     existing = _load_raw(slug) or {}
 
     payload = {
-        "slug":          slug,
-        "state":         existing.get("state", "generated"),
-        "generated_at":  datetime.now().isoformat(),
-        "approved_at":   existing.get("approved_at", ""),
-        "business_data": business_data,
+        "slug":             slug,
+        "state":            existing.get("state", "generated"),
+        "generated_at":     datetime.now().isoformat(),
+        "approved_at":      existing.get("approved_at", ""),
+        # Preserve share token across regeneration
+        "demo_token":       existing.get("demo_token", ""),
+        "demo_expires_at":  existing.get("demo_expires_at", ""),
+        "business_data":    business_data,
     }
     print(f"[STORAGE] Saving demo to: {path}")
     with open(path, "w", encoding="utf-8") as f:
@@ -205,3 +209,57 @@ def demo_exists(slug: str) -> bool:
 
 def get_all_demo_states(slugs: list[str]) -> dict[str, str]:
     return {slug: get_demo_state(slug) for slug in slugs}
+
+
+def ensure_demo_token(slug: str) -> str:
+    """
+    Generate and persist a share token for this demo if one doesn't exist yet.
+    Tokens are 32 hex characters (128-bit entropy) and expire in 365 days.
+    Returns the (existing or newly created) token, or '' if the demo doesn't exist.
+    """
+    raw = _load_raw(slug)
+    if raw is None:
+        return ""
+    token = raw.get("demo_token") or ""
+    if not token:
+        token = secrets.token_hex(16)
+        expires = (datetime.now() + timedelta(days=365)).isoformat()
+        raw["demo_token"] = token
+        raw["demo_expires_at"] = expires
+        with open(_demo_path(slug), "w", encoding="utf-8") as f:
+            json.dump(raw, f, ensure_ascii=False, indent=2)
+    return token
+
+
+def get_demo_token(slug: str) -> str | None:
+    """Return the share token for a demo, or None if not generated yet."""
+    raw = _load_raw(slug)
+    if raw is None:
+        return None
+    return raw.get("demo_token") or None
+
+
+def validate_demo_token(slug: str, token: str) -> bool:
+    """
+    Return True if the supplied token matches the stored token and hasn't expired.
+    Always returns True if no token is stored (backwards-compat for demos generated
+    before token support was added — call ensure_demo_token() to fix them).
+    """
+    raw = _load_raw(slug)
+    if raw is None:
+        return False
+    stored = raw.get("demo_token") or ""
+    if not stored:
+        # Pre-token demo: accept any access (no token was ever issued)
+        return True
+    if stored != token:
+        return False
+    expires_str = raw.get("demo_expires_at") or ""
+    if expires_str:
+        try:
+            expires = datetime.fromisoformat(expires_str)
+            if datetime.now() > expires:
+                return False
+        except ValueError:
+            pass  # malformed date — treat as not expired
+    return True

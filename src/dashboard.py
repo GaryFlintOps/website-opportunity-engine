@@ -13,6 +13,7 @@ from src.storage import (
     save_demo, load_demo_data, load_demo_meta,
     get_demo_state, set_demo_state, demo_exists,
     get_all_demo_states,
+    ensure_demo_token, get_demo_token, validate_demo_token,
 )
 from src.transformer import build_business_data
 from src.cards import prepare_leads_for_display, filter_leads
@@ -23,9 +24,11 @@ from datetime import datetime as _dt
 from src.tracking import (
     get_status, update_status, get_all_entries,
     followup_needed, OUTREACH_STATUSES, STATUS_LABELS,
+    update_lead_action, get_lead_activities, get_days_since_last_action,
 )
 import re
 from urllib.parse import quote as _url_quote
+from src.auth import require_auth, auth_enabled, ADMIN_PASSWORD, AuthRequired
 
 def build_whatsapp_url(phone: str, message: str) -> str:
     """
@@ -57,6 +60,35 @@ templates = Jinja2Templates(directory=TEMPLATES_DIR)
 os.makedirs(HERO_IMAGES_DIR, exist_ok=True)
 app.mount("/static/hero-images", StaticFiles(directory=HERO_IMAGES_DIR), name="hero-images")
 
+# ── Auth: global exception handler ────────────────────────────────────────────
+# When any route calls require_auth(request) and the cookie is missing/wrong,
+# AuthRequired is raised here and converted to a 302 → /login.
+@app.exception_handler(AuthRequired)
+async def _auth_required_handler(request: Request, exc: AuthRequired):
+    return RedirectResponse(url="/login", status_code=302)
+
+# ── Auth: HTTP middleware (defence-in-depth) ──────────────────────────────────
+# Lets /demo/, /login, /logout, and /static/ through without checking the
+# session cookie so that client-facing demo pages remain publicly accessible
+# while everything else is blocked at the network layer.
+@app.middleware("http")
+async def auth_middleware(request: Request, call_next):
+    path = request.url.path
+    # Always-public paths: demo pages, login/logout, static assets
+    if (
+        path.startswith("/demo/")
+        or path in ("/login", "/logout")
+        or path.startswith("/static/")
+    ):
+        return await call_next(request)
+    # For all other paths, enforce session cookie when auth is enabled
+    if auth_enabled():
+        session = request.cookies.get("session")
+        if session != ADMIN_PASSWORD:
+            return RedirectResponse(url="/login", status_code=302)
+    return await call_next(request)
+
+
 # ── CORS ──────────────────────────────────────────────────────────────────────
 # All browser requests are same-origin (served from this Render instance).
 # No cross-origin clients remain — CORSMiddleware is intentionally omitted.
@@ -74,8 +106,106 @@ async def startup_log():
     if on_render:
         print("[Startup] ⚠  Render free tier — filesystem is EPHEMERAL. "
               "Demos are lost on redeploy unless a Render Disk is attached.")
+    if auth_enabled():
+        print("[Startup] 🔒 Auth ENABLED — ADMIN_PASSWORD is set.")
+    else:
+        print("[Startup] ⚠  Auth DISABLED — set ADMIN_PASSWORD env var to protect the app.")
 
 _last_search: dict = {"industry": "", "location": "", "running": False, "error": ""}
+
+
+# ── Auth: login page ───────────────────────────────────────────────────────────
+
+_LOGIN_HTML = """<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Login — Opportunity Engine</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #0f1117; color: #e4e6f0;
+    font-family: 'Inter', system-ui, sans-serif;
+    min-height: 100vh; display: flex; align-items: center; justify-content: center;
+  }
+  .card {
+    background: #1a1d27; border: 1px solid #2d3148;
+    border-radius: 14px; padding: 2.5rem 2rem; width: 100%; max-width: 360px;
+  }
+  .brand { font-size: 1.1rem; font-weight: 800; margin-bottom: 0.3rem; }
+  .brand span { color: #6c63ff; }
+  .sub { font-size: 0.8rem; color: #8b8fa8; margin-bottom: 2rem; }
+  label { display: block; font-size: 0.75rem; font-weight: 600; color: #8b8fa8;
+          text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 0.4rem; }
+  input[type="password"] {
+    width: 100%; background: #0f1117; border: 1px solid #2d3148;
+    border-radius: 7px; padding: 0.72rem 1rem; color: #e4e6f0;
+    font-size: 0.9rem; font-family: inherit; outline: none;
+    transition: border-color 0.2s; margin-bottom: 1.1rem;
+  }
+  input[type="password"]:focus { border-color: #6c63ff; }
+  button {
+    width: 100%; background: #6c63ff; color: #fff;
+    border: none; border-radius: 7px; padding: 0.75rem;
+    font-size: 0.9rem; font-weight: 700; font-family: inherit;
+    cursor: pointer; transition: opacity 0.18s;
+  }
+  button:hover { opacity: 0.85; }
+  .err { color: #ff6b6b; font-size: 0.8rem; margin-bottom: 1rem; }
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="brand">🎯 Opportunity <span>Engine</span></div>
+  <div class="sub">Private dashboard — sign in to continue</div>
+  {error_block}
+  <form method="POST" action="/login">
+    <label for="password">Password</label>
+    <input type="password" id="password" name="password"
+           placeholder="Enter admin password" autofocus required />
+    <button type="submit">Sign in →</button>
+  </form>
+</div>
+</body>
+</html>"""
+
+
+@app.get("/login", response_class=HTMLResponse)
+async def login_page(request: Request):
+    """Render the login form. Already-logged-in users are bounced to /."""
+    if auth_enabled():
+        session = request.cookies.get("session")
+        if session == ADMIN_PASSWORD:
+            return RedirectResponse(url="/", status_code=302)
+    return HTMLResponse(_LOGIN_HTML.format(error_block=""))
+
+
+@app.post("/login")
+async def login(password: str = Form(...)):
+    """Validate password, set session cookie, redirect to dashboard."""
+    if not auth_enabled() or password == ADMIN_PASSWORD:
+        response = RedirectResponse(url="/", status_code=302)
+        response.set_cookie(
+            key="session",
+            value=password,
+            httponly=True,
+            samesite="lax",
+        )
+        return response
+    error_block = '<p class="err">⚠ Incorrect password — try again.</p>'
+    return HTMLResponse(
+        _LOGIN_HTML.format(error_block=error_block),
+        status_code=401,
+    )
+
+
+@app.get("/logout")
+async def logout():
+    """Clear the session cookie and redirect to the login page."""
+    response = RedirectResponse(url="/login", status_code=302)
+    response.delete_cookie("session")
+    return response
 
 
 # ── Dashboard ─────────────────────────────────────────────────────────────────
@@ -89,7 +219,9 @@ async def index(
     filter_status: str  = "",    # "", "new", "contacted", "demo_sent", …
     has_phone:     bool = False,
     wc_zero:       bool = False,  # WhatsApp confidence == 0 only
+    followup_only: bool = False,  # show only leads with 2+ days since last action
 ):
+    require_auth(request)
     leads, industry, location = load_latest_leads()
     leads = prepare_leads_for_display(leads)
 
@@ -102,19 +234,28 @@ async def index(
         entry = tracking.get(slug, {})
         phone = lead.get("phone", "")
 
-        lead["outreach_status"] = entry.get("status", "new")
-        lead["followup_nudge"]  = followup_needed(entry) if entry else None
-        lead["followup"]        = lead["followup_nudge"]   # alias used in template
+        lead["outreach_status"]        = entry.get("status", "new")
+        lead["followup_nudge"]         = followup_needed(entry) if entry else None
+        lead["followup"]               = lead["followup_nudge"]   # alias used in template
+        lead["last_action_at"]         = entry.get("last_action_at")
+        lead["stage"]                  = entry.get("stage", "NEW")
+        lead["days_since_last_action"] = get_days_since_last_action(entry)
 
         # WhatsApp confidence fallback for leads fetched before the field existed
         if "whatsapp_confidence" not in lead:
             lead["whatsapp_confidence"] = 1 if lead.get("has_whatsapp") else 0
 
-        # Per-lead send URLs (populated only if a phone number exists)
-        if phone:
-            lead["whatsapp_send_url"]   = build_whatsapp_url(phone, generate_message(lead))
-            lead["whatsapp_followup_url"] = build_whatsapp_url(phone, generate_followup(lead))
-            lead["followup_message"]    = generate_followup(lead)
+        # Ensure new WA fields exist even on old cached leads (safe defaults)
+        lead.setdefault("whatsapp_number",    None)
+        lead.setdefault("whatsapp_source",    None)
+        lead.setdefault("whatsapp_clickable", False)
+
+        # Prefer the detected whatsapp_number for send URLs; fall back to maps phone
+        wa_phone = lead.get("whatsapp_number") or phone
+        if wa_phone:
+            lead["whatsapp_send_url"]     = build_whatsapp_url(wa_phone, generate_message(lead))
+            lead["whatsapp_followup_url"] = build_whatsapp_url(wa_phone, generate_followup(lead))
+            lead["followup_message"]      = generate_followup(lead)
         else:
             lead["whatsapp_send_url"]     = ""
             lead["whatsapp_followup_url"] = ""
@@ -141,6 +282,16 @@ async def index(
     if wc_zero:
         filtered = [l for l in filtered if l.get("whatsapp_confidence", 1) == 0]
 
+    if followup_only:
+        filtered = [
+            l for l in filtered
+            if l.get("stage") != "CLOSED"
+            and l.get("days_since_last_action") is not None
+            and l["days_since_last_action"] >= 2
+        ]
+        # Sort oldest-first (highest days first)
+        filtered.sort(key=lambda l: -(l.get("days_since_last_action") or 0))
+
     for lead in filtered:
         lead["demo_state"] = get_demo_state(lead.get("slug", ""))
 
@@ -152,6 +303,18 @@ async def index(
     )
     followups_due  = sum(1 for e in tracking.values() if followup_needed(e))
     followup_count = sum(1 for l in leads if l.get("followup_nudge"))
+
+    # ── Activity-based follow-up counts (new tracker) ─────────────────────
+    count_due = sum(
+        1 for e in tracking.values()
+        if e.get("stage", "NEW") != "CLOSED"
+        and get_days_since_last_action(e) in (2, 3)
+    )
+    count_overdue = sum(
+        1 for e in tracking.values()
+        if e.get("stage", "NEW") != "CLOSED"
+        and (get_days_since_last_action(e) or -1) >= 4
+    )
 
     # ── Ephemeral storage warning ─────────────────────────────────────────
     ephemeral_warning = bool(os.getenv("RENDER") and not os.getenv("PERSISTENT_DEMOS_DIR"))
@@ -184,6 +347,7 @@ async def index(
         "filter_status":     filter_status,
         "has_phone":         has_phone,
         "wc_zero":           wc_zero,
+        "followup_only":     followup_only,
         "running":           _last_search["running"],
         "error":             _last_search["error"],
         "site_url":          SITE_URL,
@@ -197,6 +361,8 @@ async def index(
         "followup_count":    followup_count,
         "sent_today":        sent_today,
         "followups_due":     followups_due,
+        "count_due":         count_due,
+        "count_overdue":     count_overdue,
         "outreach_statuses": list(OUTREACH_STATUSES),
         "status_labels":     STATUS_LABELS,
     })
@@ -210,15 +376,18 @@ async def search_page(request: Request):
     GET /search — browser-safe redirect back to the dashboard home.
     Prevents a 405 when someone navigates directly to /search in the address bar.
     """
+    require_auth(request)
     return RedirectResponse(url="/", status_code=302)
 
 
 @app.post("/search")
 async def search(
+    request: Request,
     background_tasks: BackgroundTasks,
     industry: str = Form(...),
     location: str = Form(...),
 ):
+    require_auth(request)
     _last_search.update({"industry": industry, "location": location,
                           "running": True, "error": ""})
     background_tasks.add_task(_run_search, industry, location)
@@ -236,7 +405,8 @@ def _run_search(industry: str, location: str):
 
 
 @app.get("/status")
-async def status():
+async def status(request: Request):
+    require_auth(request)
     return {"running": _last_search["running"], "error": _last_search["error"]}
 
 
@@ -244,52 +414,116 @@ async def status():
 
 @app.get("/lead/{slug}", response_class=HTMLResponse)
 async def lead_detail(request: Request, slug: str):
+    require_auth(request)
     lead, industry, location = get_lead_by_slug(slug)
     if not lead:
         return HTMLResponse("<h1>Lead not found</h1>", status_code=404)
 
-    outreach_status  = get_status(slug)
-    outreach_msg     = generate_message(lead)
+    outreach_status   = get_status(slug)
+    tracking_entry    = get_all_entries().get(slug, {})
+    outreach_msg      = generate_message(lead)
     whatsapp_send_url = build_whatsapp_url(lead.get("phone", ""), outreach_msg)
     return templates.TemplateResponse("lead.html", {
-        "request":           request,
-        "lead":              lead,
-        "industry":          industry,
-        "location":          location,
-        "demo_state":        get_demo_state(slug),
-        "demo_meta":         load_demo_meta(slug),
-        "site_url":          SITE_URL,
-        "outreach_message":  outreach_msg,
-        "whatsapp_send_url": whatsapp_send_url,
-        "outreach_status":   outreach_status,
-        "outreach_statuses": list(OUTREACH_STATUSES),
-        "status_labels":     STATUS_LABELS,
+        "request":                request,
+        "lead":                   lead,
+        "industry":               industry,
+        "location":               location,
+        "demo_state":             get_demo_state(slug),
+        "demo_meta":              load_demo_meta(slug),
+        "site_url":               SITE_URL,
+        "outreach_message":       outreach_msg,
+        "whatsapp_send_url":      whatsapp_send_url,
+        "outreach_status":        outreach_status,
+        "outreach_statuses":      list(OUTREACH_STATUSES),
+        "status_labels":          STATUS_LABELS,
+        "activity_log":           get_lead_activities(slug),
+        "days_since_last_action": get_days_since_last_action(tracking_entry),
+        "last_action_at":         tracking_entry.get("last_action_at"),
+        "stage":                  tracking_entry.get("stage", "NEW"),
+        "demo_token":             get_demo_token(slug) or "",
     })
 
 
 # ── Outreach tracking ─────────────────────────────────────────────────────────
 
 @app.post("/track/{slug}")
-async def track_lead(slug: str, status: str = Form(...)):
+async def track_lead(request: Request, slug: str, status: str = Form(...)):
     """Update the outreach status for a lead and redirect back to lead detail."""
+    require_auth(request)
     try:
         update_status(slug, status)
+        if status == "closed":
+            update_lead_action(slug, "CLOSED")
     except ValueError as e:
         return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
     return RedirectResponse(url=f"/lead/{slug}", status_code=303)
 
 
 @app.post("/track-send/{slug}")
-async def track_send(slug: str):
+async def track_send(request: Request, slug: str):
     """
     Mark lead as 'contacted' via WhatsApp (called by JS before opening wa.me).
     Returns JSON so the JS can proceed without a full page reload.
     """
+    require_auth(request)
     try:
         update_status(slug, "contacted", channel="whatsapp")
+        update_lead_action(slug, "SENT")
     except ValueError as e:
         return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
     return JSONResponse({"ok": True})
+
+
+# ── Activity tracking endpoints ───────────────────────────────────────────────
+
+@app.post("/add-note/{slug}")
+async def add_note(request: Request, slug: str, note: str = Form(...)):
+    """Add a freetext note to a lead's activity log and redirect back to lead detail."""
+    require_auth(request)
+    update_lead_action(slug, "NOTE", note=note)
+    return RedirectResponse(url=f"/lead/{slug}", status_code=303)
+
+
+@app.post("/track-followup/{slug}")
+async def track_followup(request: Request, slug: str):
+    """Record a manual follow-up action (JSON response for JS callers)."""
+    require_auth(request)
+    update_lead_action(slug, "FOLLOW_UP")
+    return JSONResponse({"ok": True})
+
+
+@app.post("/close-lead/{slug}")
+async def close_lead(request: Request, slug: str):
+    """Close a lead: update outreach status to 'closed' and record a CLOSED activity."""
+    require_auth(request)
+    try:
+        update_status(slug, "closed")
+        update_lead_action(slug, "CLOSED")
+    except ValueError as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
+    return JSONResponse({"ok": True})
+
+
+@app.get("/api/leads/followups")
+async def leads_followups_api(request: Request):
+    """
+    Return counts of active (non-CLOSED) leads due for follow-up.
+      count_due     — leads where lastActionAt is 2–3 days ago
+      count_overdue — leads where lastActionAt is 4+ days ago
+    """
+    require_auth(request)
+    entries = get_all_entries()
+    count_due = sum(
+        1 for e in entries.values()
+        if e.get("stage", "NEW") != "CLOSED"
+        and get_days_since_last_action(e) in (2, 3)
+    )
+    count_overdue = sum(
+        1 for e in entries.values()
+        if e.get("stage", "NEW") != "CLOSED"
+        and (get_days_since_last_action(e) or -1) >= 4
+    )
+    return JSONResponse({"count_due": count_due, "count_overdue": count_overdue})
 
 
 # ── Image proxy ───────────────────────────────────────────────────────────────
@@ -469,16 +703,40 @@ def _extract_highlights(reviews: list[dict]) -> list[dict]:
 
 
 @app.get("/demo/{slug}", response_class=HTMLResponse)
-async def render_demo(request: Request, slug: str):
-    """Render the business demo page using the modern Jinja2 template."""
+async def render_demo(request: Request, slug: str, token: str = ""):
+    """
+    Render the public-facing business demo page.
+
+    Access rules:
+      • Authenticated admin (valid session cookie) → always allowed.
+      • Unauthenticated visitor → must supply ?token=<valid_token>.
+      • Invalid / expired token → 404 (don't leak that the demo exists).
+    """
+    # Check whether the caller is an authenticated admin
+    is_admin = (not auth_enabled()) or (
+        request.cookies.get("session") == ADMIN_PASSWORD
+    )
+
+    if not is_admin:
+        # Public access — validate the share token
+        if not validate_demo_token(slug, token):
+            return HTMLResponse(
+                "<html><body style='font-family:Arial;padding:40px;"
+                "background:#0d0f14;color:#f0f0f0'>"
+                "<h1>Not found</h1>"
+                "<p>This demo link is invalid or has expired.</p>"
+                "</body></html>",
+                status_code=404,
+            )
+
     data = load_demo_data(slug)
     if data is None:
         return HTMLResponse(
             "<html><body style='font-family:Arial;padding:40px;background:#0d0f14;color:#f0f0f0'>"
             f"<h1>Demo not found</h1>"
             f"<p>No demo has been generated for <code>{slug}</code> yet.</p>"
-            f"<p><a href='/' style='color:#c9a96e'>← Back to dashboard</a></p>"
-            "</body></html>",
+            + (f"<p><a href='/' style='color:#c9a96e'>← Back to dashboard</a></p>" if is_admin else "")
+            + "</body></html>",
             status_code=404,
         )
 
@@ -581,10 +839,11 @@ async def render_demo(request: Request, slug: str):
 # ── API: serve BusinessData JSON ──────────────────────────────────────────────
 
 @app.get("/api/demo/{slug}")
-async def api_get_demo(slug: str):
+async def api_get_demo(request: Request, slug: str):
     """
     Returns the BusinessData JSON for a demo slug.
     """
+    require_auth(request)
     print(f"[API] LOOKING FOR SLUG: {slug}")
     try:
         demo_files = os.listdir(DEMOS_DIR)
@@ -605,7 +864,8 @@ async def api_get_demo(slug: str):
 # ── Demo: generate on-demand ──────────────────────────────────────────────────
 
 @app.post("/generate-demo/{slug}")
-async def generate_demo(slug: str, force: bool = False):
+async def generate_demo(request: Request, slug: str, force: bool = False):
+    require_auth(request)
     """
     Build BusinessData and persist to data/demos/{slug}.json.
     The HTML page is served directly by the /demo/{slug} route on this server.
@@ -632,11 +892,15 @@ async def generate_demo(slug: str, force: bool = False):
             bd["hero_image"] = hero_img
 
         save_demo(slug, bd)
+        update_lead_action(slug, "GENERATED")
+        share_token = ensure_demo_token(slug)
         return JSONResponse({
-            "ok":       True,
-            "slug":     slug,
-            "state":    "generated",
-            "demo_url": f"{SITE_URL}/demo/{slug}",
+            "ok":        True,
+            "slug":      slug,
+            "state":     "generated",
+            "demo_url":  f"{SITE_URL}/demo/{slug}",
+            "share_url": f"{SITE_URL}/demo/{slug}?token={share_token}",
+            "token":     share_token,
         })
     except Exception as e:
         print(f"[Dashboard] generate_demo error ({slug}): {e}")
@@ -647,6 +911,7 @@ async def generate_demo(slug: str, force: bool = False):
 
 @app.post("/bulk-generate")
 async def bulk_generate(request: Request, background_tasks: BackgroundTasks):
+    require_auth(request)
     body  = await request.json()
     slugs = body.get("slugs", [])
     if not slugs:
@@ -676,6 +941,8 @@ def _generate_one(slug: str, lead: dict, industry: str):
         if hero_img:
             bd["hero_image"] = hero_img
         save_demo(slug, bd)
+        update_lead_action(slug, "GENERATED")
+        ensure_demo_token(slug)
         print(f"[BulkGen] ✓ {slug}")
     except Exception as e:
         print(f"[BulkGen] ✗ {slug}: {e}")
@@ -684,19 +951,28 @@ def _generate_one(slug: str, lead: dict, industry: str):
 # ── Demo: approve ─────────────────────────────────────────────────────────────
 
 @app.post("/approve/{slug}")
-async def approve_demo(slug: str):
+async def approve_demo(request: Request, slug: str):
+    require_auth(request)
     if not demo_exists(slug):
         return JSONResponse({"ok": False, "error": "Demo not generated yet"}, status_code=400)
     ok = set_demo_state(slug, "approved")
-    return JSONResponse({"ok": ok, "slug": slug, "state": "approved",
-                         "demo_url": f"{SITE_URL}/demo/{slug}"})
+    share_token = ensure_demo_token(slug)
+    return JSONResponse({
+        "ok":        ok,
+        "slug":      slug,
+        "state":     "approved",
+        "demo_url":  f"{SITE_URL}/demo/{slug}",
+        "share_url": f"{SITE_URL}/demo/{slug}?token={share_token}",
+        "token":     share_token,
+    })
 
 
 # ── Health / debug ────────────────────────────────────────────────────────────
 
 @app.get("/debug/demos")
-async def debug_demos():
+async def debug_demos(request: Request):
     """List all demo JSON files currently stored on this server's filesystem."""
+    require_auth(request)
     try:
         return {"files": sorted(os.listdir(DEMOS_DIR))}
     except Exception as e:
@@ -705,6 +981,7 @@ async def debug_demos():
 
 @app.get("/demo-direct", response_class=HTMLResponse)
 async def demo_direct(request: Request):
+    require_auth(request)
     """
     GET /demo-direct
 
@@ -892,6 +1169,7 @@ async def debug_guardrails(request: Request):
       - status:  PASSED / FAILED
       - reason:  why it failed (if applicable)
     """
+    require_auth(request)
     from src.guardrails import validate_image, compress_review, validate_business
     from src.enhancer  import generate_support_images
 

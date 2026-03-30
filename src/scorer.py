@@ -28,12 +28,17 @@ def score_lead(lead: dict) -> int:
     Higher score = stronger sales opportunity.
 
     Weights (total = 100):
-      +40  no website          — primary sales hook
-      +25  no WhatsApp         — direct-chat gap
-      +15  low rating (< 4.2)  — credibility gap  [note: filtered leads have >= 4.2,
-                                                    but kept here for ad-hoc use]
-      +10  reviews < 50        — low visibility
-      +10  photos < 5          — visual gap
+      +40  no website                        — primary sales hook
+      +25  WhatsApp gap (graded, see below)  — direct-chat opportunity
+      +15  low rating (< 4.2)                — credibility gap
+      +10  reviews < 50                      — low visibility
+      +10  photos < 5                        — visual gap
+
+    WhatsApp gap scoring (graded by source, max = 25):
+      +25  has_whatsapp=False                — no WA presence at all (biggest opportunity)
+      +20  whatsapp_source="maps"            — WA number exists but invisible on site
+      +12  whatsapp_source="inferred"        — mobile on site but no direct WA link
+      + 0  whatsapp_source="link"            — fully set up, nothing to sell here
     """
     score = 0
 
@@ -41,9 +46,15 @@ def score_lead(lead: dict) -> int:
     if not lead.get("website"):
         score += 40
 
-    # No WhatsApp → direct-chat channel missing
+    # WhatsApp gap — graded by source quality
+    wa_src = lead.get("whatsapp_source")
     if not lead.get("has_whatsapp"):
-        score += 25
+        score += 25   # no WA at all — biggest opportunity
+    elif wa_src == "maps":
+        score += 20   # mobile exists but not promoted on site
+    elif wa_src == "inferred":
+        score += 12   # mobile on site but no clickable WA link
+    # wa_src == "link" → +0 (already optimised)
 
     # Low rating → credibility gap
     rating = lead.get("rating") or 5.0

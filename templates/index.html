@@ -224,7 +224,7 @@
             color: var(--orange); margin-top: 0.2rem; white-space: nowrap;
         }
 
-        /* WA CONFIDENCE DOT */
+        /* WA CONFIDENCE DOT (legacy — kept for backward compat) */
         .wc-dot {
             display: inline-flex; align-items: center; justify-content: center;
             width: 20px; height: 20px; border-radius: 50%;
@@ -233,6 +233,19 @@
         .wc-0 { background: rgba(255,107,107,0.12); color: var(--red); }
         .wc-1 { background: rgba(240,180,41,0.12);  color: var(--gold); }
         .wc-2 { background: rgba(56,217,169,0.12);  color: var(--green); }
+
+        /* WA SOURCE BADGE (new) */
+        .wa-badge {
+            display: inline-block; padding: 0.15rem 0.5rem;
+            border-radius: 4px; font-size: 0.62rem; font-weight: 700;
+            letter-spacing: 0.04em; text-transform: uppercase; white-space: nowrap;
+            cursor: default;
+        }
+        .wa-none     { background: rgba(255,107,107,0.1);  color: var(--red); }
+        .wa-maps     { background: rgba(240,180,41,0.12);  color: var(--gold); }
+        .wa-inferred { background: rgba(255,159,67,0.12);  color: #ff9f43; }
+        .wa-link     { background: rgba(56,217,169,0.12);  color: var(--green); }
+        .wa-number   { font-size: 0.61rem; color: var(--muted); display: block; margin-top: 0.15rem; }
 
         /* QUICK FILTER CHIP */
         .quick-filter-link {
@@ -303,6 +316,28 @@
         .filter-pct-ok   { color: var(--green); font-weight: 700; }
         .filter-pct-warn { color: var(--red);   font-weight: 700; }
 
+        /* DAYS BADGE */
+        .days-badge {
+            display: inline-flex; align-items: center; justify-content: center;
+            min-width: 30px; height: 22px; border-radius: 5px;
+            font-size: 0.72rem; font-weight: 700; padding: 0 0.45rem; white-space: nowrap;
+        }
+        .days-ok   { background: rgba(56,217,169,0.12);  color: var(--green); }
+        .days-warn { background: rgba(240,180,41,0.12);  color: var(--gold); }
+        .days-bad  { background: rgba(255,107,107,0.1);  color: var(--red); }
+
+        /* FOLLOW-UP TRACKER BANNER */
+        .followup-tracker {
+            display: flex; align-items: center; gap: 1.5rem; flex-wrap: wrap;
+            background: var(--surface); border: 1px solid rgba(255,159,67,0.3);
+            border-radius: 10px; padding: 0.9rem 1.4rem; margin-bottom: 1.25rem;
+        }
+        .tracker-title { font-size: 0.78rem; font-weight: 700; color: var(--orange); flex-shrink: 0; }
+        .tracker-item  { display: flex; align-items: baseline; gap: 0.4rem; }
+        .tracker-count { font-size: 1.3rem; font-weight: 800; line-height: 1; }
+        .tracker-label { font-size: 0.71rem; color: var(--muted); }
+        .tracker-divider { width: 1px; height: 28px; background: var(--border); }
+
         /* EMPTY STATE */
         .empty-state { text-align: center; padding: 5rem 2rem; color: var(--muted); }
         .empty-icon  { font-size: 2.8rem; margin-bottom: 1rem; }
@@ -333,10 +368,19 @@
     <aside class="sidebar">
         <div class="brand">
             <div class="brand-icon">🎯</div>
-            <div>
+            <div style="flex: 1;">
                 <h1>Opportunity Engine</h1>
                 <p>Website lead finder</p>
             </div>
+            <a href="/logout" title="Sign out"
+               style="color: var(--muted); font-size: 0.75rem; text-decoration: none;
+                      padding: 0.3rem 0.6rem; border: 1px solid var(--border);
+                      border-radius: 5px; white-space: nowrap; flex-shrink: 0;
+                      transition: all 0.15s;"
+               onmouseover="this.style.color='var(--text)';this.style.borderColor='var(--accent)'"
+               onmouseout="this.style.color='var(--muted)';this.style.borderColor='var(--border)'">
+                ⎋ out
+            </a>
         </div>
 
         <!-- SEARCH -->
@@ -407,9 +451,17 @@
                     onchange="this.form.submit()" />
                 <label for="wc_zero">No WhatsApp (wc=0)</label>
             </div>
+            <div class="checkbox-row">
+                <input type="checkbox" id="followup_only" name="followup_only" value="true"
+                    {% if followup_only %}checked{% endif %}
+                    onchange="this.form.submit()" />
+                <label for="followup_only">Follow-up needed (2+ days)</label>
+            </div>
             <!-- Quick filter: daily outreach list -->
             <a href="/?min_score=80&has_phone=true&wc_zero=true&filter_status=new"
                class="quick-filter-link">🎯 Daily outreach list</a>
+            <a href="/?followup_only=true"
+               class="quick-filter-link" style="margin-top: 0.4rem;">🔔 Needs follow-up</a>
         </form>
         {% endif %}
     </aside>
@@ -452,6 +504,31 @@
         {% endif %}
 
         {% if total > 0 %}
+
+        <!-- FOLLOW-UP TRACKER BANNER -->
+        {% if count_due > 0 or count_overdue > 0 %}
+        <div class="followup-tracker">
+            <span class="tracker-title">📅 Follow-ups needed</span>
+            {% if count_due > 0 %}
+            <div class="tracker-item">
+                <span class="tracker-count" style="color: var(--gold);">{{ count_due }}</span>
+                <span class="tracker-label">due (2–3 days)</span>
+            </div>
+            {% endif %}
+            {% if count_due > 0 and count_overdue > 0 %}
+            <div class="tracker-divider"></div>
+            {% endif %}
+            {% if count_overdue > 0 %}
+            <div class="tracker-item">
+                <span class="tracker-count" style="color: var(--red);">{{ count_overdue }}</span>
+                <span class="tracker-label">overdue (4+ days)</span>
+            </div>
+            {% endif %}
+            <a href="/?followup_only=true" class="quick-filter-link" style="margin-top: 0; margin-left: auto;">
+                View all →
+            </a>
+        </div>
+        {% endif %}
 
         <!-- STATS -->
         <div class="stats">
@@ -534,6 +611,8 @@
                         <th>Website</th>
                         <th>WA</th>
                         <th>Status</th>
+                        <th>Last Action</th>
+                        <th>Days</th>
                         <th>Demo</th>
                         <th></th>
                     </tr>
@@ -568,9 +647,21 @@
                             {% endif %}
                         </td>
                         <td>
-                            {% set wc = lead.whatsapp_confidence | default(0) | int %}
-                            <span class="wc-dot wc-{{ [wc, 2] | min }}"
-                                  title="WhatsApp confidence: {{ wc }}">{{ wc }}</span>
+                            {% set wa_src = lead.whatsapp_source %}
+                            {% if not lead.has_whatsapp %}
+                                <span class="wa-badge wa-none" title="No WhatsApp presence detected">NO WA</span>
+                            {% elif wa_src == 'link' %}
+                                <span class="wa-badge wa-link" title="Direct WhatsApp link on website">ACTIVE</span>
+                            {% elif wa_src == 'inferred' %}
+                                <span class="wa-badge wa-inferred" title="Mobile number on site — no direct WA link">WEAK</span>
+                            {% elif wa_src == 'maps' %}
+                                <span class="wa-badge wa-maps" title="Mobile from Google Maps — not promoted on site">HIDDEN</span>
+                            {% else %}
+                                <span class="wa-badge wa-none" title="No WhatsApp detected">—</span>
+                            {% endif %}
+                            {% if lead.whatsapp_number %}
+                                <span class="wa-number">{{ lead.whatsapp_number }}</span>
+                            {% endif %}
                         </td>
                         <td>
                             <span class="os-badge os-{{ lead.outreach_status }}">
@@ -578,6 +669,23 @@
                             </span>
                             {% if lead.followup_nudge %}
                             <span class="followup-nudge">🔔 {{ lead.followup_nudge }}</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if lead.last_action_at %}
+                            <span class="rating-val">{{ lead.last_action_at[:10] }}</span>
+                            {% else %}
+                            <span class="rating-val">—</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if lead.days_since_last_action is not none and lead.days_since_last_action != None %}
+                                {% set d = lead.days_since_last_action %}
+                                <span class="days-badge {% if d <= 1 %}days-ok{% elif d <= 3 %}days-warn{% else %}days-bad{% endif %}">
+                                    {{ d }}d
+                                </span>
+                            {% else %}
+                            <span class="rating-val">—</span>
                             {% endif %}
                         </td>
                         <td>

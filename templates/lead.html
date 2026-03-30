@@ -185,6 +185,50 @@
         .status-negotiating { background: rgba(240,180,41,0.12);  color: var(--gold); }
         .status-closed      { background: rgba(255,107,107,0.1);  color: var(--red); }
 
+        /* ACTIVITY LOG */
+        .activity-log { display: flex; flex-direction: column; }
+        .activity-item {
+            display: flex; align-items: flex-start; gap: 1rem;
+            padding: 0.75rem 0; border-bottom: 1px solid var(--border);
+        }
+        .activity-item:last-child { border-bottom: none; }
+        .activity-dot {
+            width: 10px; height: 10px; border-radius: 50%;
+            flex-shrink: 0; margin-top: 0.35rem;
+        }
+        .dot-GENERATED { background: var(--accent); }
+        .dot-SENT      { background: var(--green); }
+        .dot-NOTE      { background: var(--gold); }
+        .dot-FOLLOW_UP { background: #ff9f43; }
+        .dot-CLOSED    { background: var(--muted); }
+        .activity-body { flex: 1; }
+        .activity-type {
+            font-size: 0.75rem; font-weight: 700;
+            text-transform: uppercase; letter-spacing: 0.07em;
+        }
+        .type-GENERATED { color: var(--accent); }
+        .type-SENT      { color: var(--green); }
+        .type-NOTE      { color: var(--gold); }
+        .type-FOLLOW_UP { color: #ff9f43; }
+        .type-CLOSED    { color: var(--muted); }
+        .activity-note { font-size: 0.83rem; color: var(--text); margin-top: 0.25rem; line-height: 1.5; }
+        .activity-time { font-size: 0.71rem; color: var(--muted); margin-top: 0.15rem; }
+
+        /* NOTE FORM */
+        .note-textarea {
+            width: 100%; min-height: 72px; resize: vertical;
+            background: var(--surface2); border: 1px solid var(--border);
+            border-radius: 8px; color: var(--text); font-family: inherit;
+            font-size: 0.85rem; line-height: 1.6; padding: 0.65rem 0.9rem; outline: none;
+            margin-bottom: 0.6rem;
+        }
+        .note-textarea:focus { border-color: var(--accent); }
+
+        /* ACTIVITY ACTION BUTTONS */
+        .btn-note     { background: rgba(240,180,41,0.1);  color: var(--gold);   border: 1px solid rgba(240,180,41,0.25);  font-size: 0.78rem; padding: 0.4rem 0.9rem; }
+        .btn-followup-act { background: rgba(255,159,67,0.1);  color: #ff9f43; border: 1px solid rgba(255,159,67,0.25); font-size: 0.78rem; padding: 0.4rem 0.9rem; }
+        .btn-close-lead   { background: rgba(139,143,168,0.1); color: var(--muted); border: 1px solid var(--border);           font-size: 0.78rem; padding: 0.4rem 0.9rem; }
+
         /* TOAST */
         #toast {
             position: fixed; bottom: 2rem; left: 50%;
@@ -264,7 +308,7 @@
             </button>
 
             {% elif demo_state == 'generated' %}
-            <a href="{{ site_url }}/demo/{{ lead.slug }}" target="_blank" class="btn btn-demo">
+            <a href="{{ site_url }}/demo/{{ lead.slug }}{% if demo_token %}?token={{ demo_token }}{% endif %}" target="_blank" class="btn btn-demo">
                 🔗 Open Demo
             </a>
             <button class="btn btn-approve" id="approveBtn"
@@ -277,10 +321,10 @@
             </button>
 
             {% elif demo_state == 'approved' %}
-            <a href="{{ site_url }}/demo/{{ lead.slug }}" target="_blank" class="btn btn-demo">
+            <a href="{{ site_url }}/demo/{{ lead.slug }}{% if demo_token %}?token={{ demo_token }}{% endif %}" target="_blank" class="btn btn-demo">
                 🔗 Open Demo
             </a>
-            <button class="btn btn-copy" onclick="copyLink('{{ lead.slug }}')">
+            <button class="btn btn-copy" onclick="copyLink('{{ lead.slug }}', '{{ demo_token }}')">
                 📋 Copy Link
             </button>
             <button class="btn btn-regen"
@@ -358,12 +402,33 @@
                 <div class="signal signal-bad">
                     <span class="signal-icon">💬</span>
                     <span class="signal-text">No WhatsApp presence</span>
-                    <span class="signal-pts">+2 pts</span>
+                    <span class="signal-pts">+25 pts</span>
+                </div>
+                {% elif lead.whatsapp_source == 'maps' %}
+                <div class="signal signal-bad">
+                    <span class="signal-icon">💬</span>
+                    <span class="signal-text">
+                        WA hidden — mobile in Maps only
+                        {% if lead.whatsapp_number %}<br><small style="font-size:0.72rem; color:var(--muted);">{{ lead.whatsapp_number }}</small>{% endif %}
+                    </span>
+                    <span class="signal-pts">+20 pts</span>
+                </div>
+                {% elif lead.whatsapp_source == 'inferred' %}
+                <div class="signal signal-bad" style="background:rgba(255,159,67,0.06); border-color:rgba(255,159,67,0.15);">
+                    <span class="signal-icon">💬</span>
+                    <span class="signal-text">
+                        Mobile on site — no direct WA link
+                        {% if lead.whatsapp_number %}<br><small style="font-size:0.72rem; color:var(--muted);">{{ lead.whatsapp_number }}</small>{% endif %}
+                    </span>
+                    <span class="signal-pts" style="background:rgba(255,159,67,0.15);color:#ff9f43;">+12 pts</span>
                 </div>
                 {% else %}
                 <div class="signal signal-ok">
                     <span class="signal-icon">💬</span>
-                    <span class="signal-text">Has WhatsApp</span>
+                    <span class="signal-text">
+                        WhatsApp active (direct link)
+                        {% if lead.whatsapp_number %}<br><small style="font-size:0.72rem; color:var(--muted);">{{ lead.whatsapp_number }}</small>{% endif %}
+                    </span>
                     <span class="signal-pts">+0</span>
                 </div>
                 {% endif %}
@@ -462,6 +527,66 @@
         </div>
     </div>
 
+    <!-- ACTIVITY LOG -->
+    <div class="card">
+        <h3 style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+            <span>Activity Log</span>
+            {% if days_since_last_action is not none %}
+            <span style="font-size: 0.78rem; font-weight: 600; font-style: normal; text-transform: none; letter-spacing: 0;
+                         color: {% if days_since_last_action <= 1 %}var(--green){% elif days_since_last_action <= 3 %}var(--gold){% else %}var(--red){% endif %};">
+                ⏱ {{ days_since_last_action }} day{% if days_since_last_action != 1 %}s{% endif %} since last action
+            </span>
+            {% else %}
+            <span style="font-size: 0.78rem; color: var(--muted); font-style: normal; text-transform: none; letter-spacing: 0;">No activity yet</span>
+            {% endif %}
+        </h3>
+
+        <!-- QUICK ACTION BUTTONS -->
+        <div style="display: flex; gap: 0.6rem; flex-wrap: wrap; margin-bottom: 1rem;">
+            <button class="btn btn-followup-act" onclick="recordFollowup()">🔔 Log Follow-up</button>
+            <button class="btn btn-close-lead"   onclick="closeLead()">✗ Close Lead</button>
+        </div>
+
+        <!-- ADD NOTE FORM -->
+        <form method="POST" action="/add-note/{{ lead.slug }}" style="margin-bottom: 1.1rem;">
+            <textarea name="note" class="note-textarea"
+                      placeholder="Add a note… (e.g. left voicemail, owner interested, try again Friday)"
+                      required></textarea>
+            <div style="display: flex; justify-content: flex-end;">
+                <button type="submit" class="btn btn-note">📝 Save Note</button>
+            </div>
+        </form>
+
+        <!-- ACTIVITY ITEMS -->
+        {% if activity_log %}
+        <div class="activity-log">
+            {% for act in activity_log %}
+            <div class="activity-item">
+                <span class="activity-dot dot-{{ act.type }}"></span>
+                <div class="activity-body">
+                    <span class="activity-type type-{{ act.type }}">
+                        {% if act.type == 'GENERATED' %}🚀 Demo Generated
+                        {% elif act.type == 'SENT' %}💬 Sent via WhatsApp
+                        {% elif act.type == 'NOTE' %}📝 Note
+                        {% elif act.type == 'FOLLOW_UP' %}🔔 Follow-up Logged
+                        {% elif act.type == 'CLOSED' %}✗ Lead Closed
+                        {% else %}{{ act.type }}{% endif %}
+                    </span>
+                    {% if act.note %}
+                    <div class="activity-note">{{ act.note }}</div>
+                    {% endif %}
+                    <div class="activity-time">{{ act.created_at[:16] | replace("T", " ") }} UTC</div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div style="color: var(--muted); font-size: 0.83rem; font-style: italic; padding: 0.5rem 0;">
+            No activity recorded yet. Actions like generating a demo or sending via WhatsApp will appear here.
+        </div>
+        {% endif %}
+    </div>
+
     <!-- OUTREACH MESSAGE -->
     <div class="card">
         <h3 style="display:flex; justify-content:space-between; align-items:center;">
@@ -524,8 +649,11 @@ async function approveDemo(slug) {
         const r = await fetch(`/approve/${slug}`, { method: 'POST' });
         const d = await r.json();
         if (d.ok) {
-            showToast('✅ Approved! Refreshing…');
-            setTimeout(() => location.reload(), 1200);
+            // Auto-copy the shareable token URL to clipboard after approval
+            const shareUrl = d.share_url || d.demo_url || `{{ site_url }}/demo/${slug}`;
+            try { await navigator.clipboard.writeText(shareUrl); } catch {}
+            showToast('✅ Approved! Share link copied — Refreshing…');
+            setTimeout(() => location.reload(), 1400);
         } else {
             btn.disabled = false;
             btn.textContent = '✓ Approve';
@@ -554,8 +682,10 @@ async function regenDemo(slug) {
     }
 }
 
-function copyLink(slug) {
-    const url = `{{ site_url }}/demo/${slug}`;
+function copyLink(slug, token) {
+    // Use the token URL when a token is available so clients can access the demo
+    const base = `{{ site_url }}/demo/${slug}`;
+    const url = token ? `${base}?token=${token}` : base;
     navigator.clipboard.writeText(url).then(() => {
         showToast(`📋 Copied: ${url}`);
     }).catch(() => {
@@ -572,6 +702,37 @@ function copyOutreach() {
         document.execCommand('copy');
         showToast('📋 Message copied');
     });
+}
+
+async function recordFollowup() {
+    try {
+        const r = await fetch(`/track-followup/${slug}`, { method: 'POST' });
+        const d = await r.json();
+        if (d.ok) {
+            showToast('🔔 Follow-up logged');
+            setTimeout(() => location.reload(), 1200);
+        } else {
+            showToast('❌ Failed to log follow-up');
+        }
+    } catch (e) {
+        showToast('❌ Request failed');
+    }
+}
+
+async function closeLead() {
+    if (!confirm('Mark this lead as Closed? The outreach status will be set to "Closed".')) return;
+    try {
+        const r = await fetch(`/close-lead/${slug}`, { method: 'POST' });
+        const d = await r.json();
+        if (d.ok) {
+            showToast('✓ Lead closed — refreshing…');
+            setTimeout(() => location.reload(), 1200);
+        } else {
+            showToast(`❌ ${d.error}`);
+        }
+    } catch (e) {
+        showToast('❌ Request failed');
+    }
 }
 
 async function trackSend(slug, waUrl) {

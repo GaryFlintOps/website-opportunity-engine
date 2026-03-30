@@ -7,27 +7,47 @@ ready for future reporting without changing the public API.
 
 Schema:
   leads_tracking (
-    slug         TEXT PRIMARY KEY,
-    status       TEXT NOT NULL DEFAULT 'new',
-    channel      TEXT,
-    history_json TEXT NOT NULL DEFAULT '[]',
-    created_at   TEXT NOT NULL,
-    updated_at   TEXT NOT NULL
+    slug           TEXT PRIMARY KEY,
+    status         TEXT NOT NULL DEFAULT 'new',
+    channel        TEXT,
+    history_json   TEXT NOT NULL DEFAULT '[]',
+    created_at     TEXT NOT NULL,
+    updated_at     TEXT NOT NULL,
+    last_action_at TEXT,
+    stage          TEXT DEFAULT 'NEW'
+  )
+
+  lead_activity (
+    id         TEXT PRIMARY KEY,
+    lead_id    TEXT NOT NULL,
+    type       TEXT NOT NULL,   -- GENERATED | SENT | NOTE | FOLLOW_UP | CLOSED
+    note       TEXT,
+    created_at TEXT NOT NULL
   )
 
 Valid statuses (pipeline order):
   new → contacted → replied → no_response → demo_sent → negotiating → closed → not_interested
 
+Valid stages (simplified pipeline):
+  NEW → REVIEWED → DEMO_GENERATED → SENT → REPLIED → CLOSED
+
+Valid activity types:
+  GENERATED | SENT | NOTE | FOLLOW_UP | CLOSED
+
 Exports:
-  get_status(slug)                          -> str
-  update_status(slug, status, channel="")   -> None
-  get_all_statuses()                        -> dict[str, str]
-  get_all_entries()                         -> dict[str, dict]
-  followup_needed(entry)                    -> str | None
+  get_status(slug)                               -> str
+  update_status(slug, status, channel="")        -> None
+  get_all_statuses()                             -> dict[str, str]
+  get_all_entries()                              -> dict[str, dict]
+  followup_needed(entry)                         -> str | None
+  update_lead_action(slug, type, note=None)      -> None
+  get_lead_activities(slug)                      -> list[dict]
+  get_days_since_last_action(entry)              -> int | None
 """
 
 import os
 import json
+import uuid
 import sqlite3
 from datetime import datetime, timezone
 from src.config import OUTPUT_DIR
@@ -57,6 +77,32 @@ STATUS_LABELS = {
     "not_interested": "Not Interested",
 }
 
+LEAD_STAGES = (
+    "NEW",
+    "REVIEWED",
+    "DEMO_GENERATED",
+    "SENT",
+    "REPLIED",
+    "CLOSED",
+)
+
+ACTIVITY_TYPES = (
+    "GENERATED",
+    "SENT",
+    "NOTE",
+    "FOLLOW_UP",
+    "CLOSED",
+)
+
+# Maps activity type → stage update (None = no stage change)
+_ACTIVITY_TO_STAGE: dict[str, str | None] = {
+    "GENERATED": "DEMO_GENERATED",
+    "SENT":      "SENT",
+    "NOTE":      None,
+    "FOLLOW_UP": None,
+    "CLOSED":    "CLOSED",
+}
+
 
 # ── Internal helpers ───────────────────────────────────────────────────────────
 
@@ -75,12 +121,34 @@ def _init_db() -> None:
     with _conn() as c:
         c.execute("""
             CREATE TABLE IF NOT EXISTS leads_tracking (
-                slug         TEXT PRIMARY KEY,
-                status       TEXT NOT NULL DEFAULT 'new',
-                channel      TEXT,
-                history_json TEXT NOT NULL DEFAULT '[]',
-                created_at   TEXT NOT NULL,
-                updated_at   TEXT NOT NULL
+                slug           TEXT PRIMARY KEY,
+                status         TEXT NOT NULL DEFAULT 'new',
+                channel        TEXT,
+                history_json   TEXT NOT NULL DEFAULT '[]',
+                created_at     TEXT NOT NULL,
+                updated_at     TEXT NOT NULL,
+                last_action_at TEXT,
+                stage          TEXT DEFAULT 'NEW'
+            )
+        """)
+        # Idempotent migrations: add new columns if they don't exist yet
+        for col, defn in [
+            ("last_action_at", "TEXT"),
+            ("stage",          "TEXT DEFAULT 'NEW'"),
+        ]:
+            try:
+                c.execute(f"ALTER TABLE leads_tracking ADD COLUMN {col} {defn}")
+            except Exception:
+                pass  # Column already exists — safe to ignore
+
+        # Activity log table
+        c.execute("""
+            CREATE TABLE IF NOT EXISTS lead_activity (
+                id         TEXT PRIMARY KEY,
+                lead_id    TEXT NOT NULL,
+                type       TEXT NOT NULL,
+                note       TEXT,
+                created_at TEXT NOT NULL
             )
         """)
         c.commit()
@@ -115,13 +183,23 @@ def _migrate_from_json() -> None:
 
 
 def _row_to_dict(row: sqlite3.Row) -> dict:
-    return {
+    d = {
         "status":     row["status"],
         "channel":    row["channel"],
         "history":    json.loads(row["history_json"]),
         "created_at": row["created_at"],
         "updated_at": row["updated_at"],
     }
+    # New columns added via migration — use try/except for safety on old DB snapshots
+    try:
+        d["last_action_at"] = row["last_action_at"]
+    except Exception:
+        d["last_action_at"] = None
+    try:
+        d["stage"] = row["stage"] or "NEW"
+    except Exception:
+        d["stage"] = "NEW"
+    return d
 
 
 # ── Public API ─────────────────────────────────────────────────────────────────
@@ -195,7 +273,8 @@ def get_all_entries() -> dict:
     _ensure_db()
     with _conn() as c:
         rows = c.execute(
-            "SELECT slug, status, channel, history_json, created_at, updated_at "
+            "SELECT slug, status, channel, history_json, created_at, updated_at, "
+            "last_action_at, stage "
             "FROM leads_tracking"
         ).fetchall()
     return {r["slug"]: _row_to_dict(r) for r in rows}
@@ -227,6 +306,96 @@ def followup_needed(entry: dict) -> str | None:
     if status == "demo_sent" and age_days >= 3:
         return "Check in on demo"
     return None
+
+
+def get_days_since_last_action(entry: dict) -> int | None:
+    """
+    Return the whole number of days elapsed since the lead's last recorded action.
+    Returns None if no action has been recorded yet (last_action_at is NULL).
+    """
+    last_action = entry.get("last_action_at")
+    if not last_action:
+        return None
+    try:
+        ts = datetime.fromisoformat(last_action)
+        if ts.tzinfo is None:
+            ts = ts.replace(tzinfo=timezone.utc)
+        return int((datetime.now(timezone.utc) - ts).total_seconds() // 86400)
+    except Exception:
+        return None
+
+
+def update_lead_action(slug: str, type: str, note: str | None = None) -> None:
+    """
+    Record a lead action:
+      1. Updates leads_tracking.last_action_at to now()
+      2. Updates leads_tracking.stage if the action implies a stage change
+      3. Inserts a new record into lead_activity
+
+    Raises ValueError for unrecognised activity types.
+    """
+    _ensure_db()
+    if type not in ACTIVITY_TYPES:
+        raise ValueError(f"Invalid activity type '{type}'. Must be one of {ACTIVITY_TYPES}")
+
+    ts           = _now()
+    activity_id  = str(uuid.uuid4())
+    new_stage    = _ACTIVITY_TO_STAGE.get(type)  # None → no stage change
+
+    with _conn() as c:
+        # Ensure a tracking row exists for this slug
+        row = c.execute(
+            "SELECT slug FROM leads_tracking WHERE slug = ?", (slug,)
+        ).fetchone()
+        if not row:
+            c.execute("""
+                INSERT OR IGNORE INTO leads_tracking
+                    (slug, status, channel, history_json, created_at, updated_at, last_action_at, stage)
+                VALUES (?, 'new', NULL, '[]', ?, ?, ?, 'NEW')
+            """, (slug, ts, ts, ts))
+
+        if new_stage:
+            c.execute("""
+                UPDATE leads_tracking
+                SET last_action_at = ?, stage = ?, updated_at = ?
+                WHERE slug = ?
+            """, (ts, new_stage, ts, slug))
+        else:
+            c.execute("""
+                UPDATE leads_tracking
+                SET last_action_at = ?, updated_at = ?
+                WHERE slug = ?
+            """, (ts, ts, slug))
+
+        c.execute("""
+            INSERT INTO lead_activity (id, lead_id, type, note, created_at)
+            VALUES (?, ?, ?, ?, ?)
+        """, (activity_id, slug, type, note, ts))
+        c.commit()
+
+    print(f"[Activity] {slug} → {type}" + (f": {note[:60]}" if note else ""))
+
+
+def get_lead_activities(slug: str) -> list:
+    """Return all activity records for a lead, newest first."""
+    _ensure_db()
+    with _conn() as c:
+        rows = c.execute(
+            "SELECT id, type, note, created_at "
+            "FROM lead_activity "
+            "WHERE lead_id = ? "
+            "ORDER BY created_at DESC",
+            (slug,),
+        ).fetchall()
+    return [
+        {
+            "id":         r["id"],
+            "type":       r["type"],
+            "note":       r["note"],
+            "created_at": r["created_at"],
+        }
+        for r in rows
+    ]
 
 
 # ── Lazy initialisation ───────────────────────────────────────────────────────

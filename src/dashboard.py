@@ -178,7 +178,7 @@ async def login_page(request: Request):
         session = request.cookies.get("session")
         if session == ADMIN_PASSWORD:
             return RedirectResponse(url="/", status_code=302)
-    return HTMLResponse(_LOGIN_HTML.format(error_block=""))
+    return HTMLResponse(_LOGIN_HTML.replace("{error_block}", ""))
 
 
 @app.post("/login")
@@ -195,7 +195,7 @@ async def login(password: str = Form(...)):
         return response
     error_block = '<p class="err">⚠ Incorrect password — try again.</p>'
     return HTMLResponse(
-        _LOGIN_HTML.format(error_block=error_block),
+        _LOGIN_HTML.replace("{error_block}", error_block),
         status_code=401,
     )
 
